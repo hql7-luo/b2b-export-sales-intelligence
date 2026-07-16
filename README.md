@@ -1,20 +1,19 @@
-# AI-Powered B2B Export Sales Intelligence System
+# B2B Export Sales Workspace
 
-> A portfolio-ready Streamlit application that turns export-sales data into
-> practical lead, inquiry, quotation, and follow-up decisions.
+> An inquiry-to-quote workspace for B2B export sales teams.
 
-![Dashboard](assets/screenshots/dashboard.png)
+![Analyze Inquiry workspace](assets/screenshots/phase1-analyze-en.png)
 
 ## 1. Project Overview
 
-The **AI-Powered B2B Export Sales Intelligence System** is a local-first web
-application for export sales professionals. It combines CRM-style customer
-management, explainable lead scoring, inquiry analysis, Incoterm quotation
-calculation, follow-up planning, and sales analytics in one simple workspace.
+The **B2B Export Sales Workspace** is a local-first web application for export
+sales professionals. It organizes the daily path from a buyer message to a
+saved inquiry, quotation, and follow-up while keeping customer records and
+commercial assumptions traceable.
 
 The project demonstrates applied Python programming, SQL data management,
-business analysis, supply-chain knowledge, information-systems design, and a
-practical AI integration with a deterministic fallback.
+business analysis, supply-chain knowledge, information-systems design, and
+tested rule-based automation.
 
 All bundled companies, people, email addresses, phone numbers, products,
 transactions, and costs are fictional. Demo scenarios use creative-printing and
@@ -39,40 +38,42 @@ traceable lead-to-order workflow.
 
 ## 3. Key Features
 
-### P0 — Core workflows
+### Core workflow
 
 - **English / Chinese UI:** a persistent top-right language control localizes
   navigation, forms, tables, guidance, and quotation formulas while preserving
   canonical database values.
-- **Dashboard:** customer KPIs, A/B/C/D grade distribution, 30-day inquiries,
-  quoted/sample/won customers, expected sales, country/source distributions,
-  sales funnel, and upcoming follow-ups.
+- **Analyze Inquiry:** the default workspace turns a buyer message into
+  confirmed requirements, gaps, risks, questions, and a professional English
+  reply draft.
 - **Customer Management:** add, edit, delete, search, filter, CSV/XLSX import,
   safe Excel export, and complete lead fields.
-- **Explainable Lead Scoring:** five visible dimensions totaling 100 points,
-  grade reasoning, field-based automatic rules, and auditable manual overrides.
-- **Quotation Calculator:** EXW, FOB, CIF, and DDP pricing; CNY-to-USD conversion;
+- **Create Quotation:** EXW, FOB, CIF, and DDP pricing; CNY-to-USD conversion;
   Gross Margin and Markup; unit/total quote, gross profit, gross margin, record
   persistence, commercial terms, and Excel quotation export.
+- **Follow-ups:** due-date prioritization, communication history, next actions,
+  and concise professional English follow-up drafts.
 
-### P1 — Sales intelligence
+### Customer and commercial records
 
-- **Inquiry Analyzer:** extracts 11 RFQ fields, lists confirmed and missing
-  information, flags risks, proposes questions, scores completeness, and drafts
-  an English reply.
-- **Optional AI:** OpenAI Structured Outputs when configured, with schema
-  validation and automatic rule-engine fallback on any failure.
-- **Follow-up Tracker:** overdue prioritization, communication history,
-  stage-specific advice, next dates, and short English messages.
+- **Explainable Lead Scoring:** five visible dimensions totaling 100 points,
+  grade reasoning, field-based automatic rules, and auditable manual overrides.
+- **Traceable records:** SQLite stores customers, inquiries, quotations,
+  follow-ups, products, and activities with foreign-key protection.
+- **Optional enhanced analysis:** when explicitly configured and authorized,
+  inquiry text can use an external structured-analysis service; local rules
+  remain the default and fallback.
 
-### P2 — Reference tools
+### Reference and analytics
 
 - **Product Knowledge Base:** searchable product, cost, MOQ, lead-time,
   packaging, question, and selling-point records.
 - **Product Matching:** explainable keyword matches between inquiries and the
   knowledge base.
-- **Settings:** runtime status, AI availability, quote convention, database
-  location, and safe fictional demo-data initialization.
+- **Analytics:** customer KPIs, lead-quality distribution, sales funnel,
+  country/source distributions, and upcoming follow-ups.
+- **Settings:** quotation conventions, local-data safeguards, and safe fictional
+  demo-data initialization without exposing local absolute paths.
 
 ## 4. System Architecture
 
@@ -83,8 +84,8 @@ flowchart LR
     S --> R["Parameterized repositories"]
     R --> DB[("SQLite")]
     S --> X["Excel import/export"]
-    S --> L["Rule analyzer"]
-    L --> O["Optional OpenAI API"]
+    S --> L["Local inquiry rules"]
+    L --> O["Optional external analysis"]
     O -. "failure or invalid JSON" .-> L
 ```
 
@@ -109,7 +110,7 @@ The architecture intentionally stays simple:
 | Analysis | Pandas | Filtering, tabular data, and transfers |
 | Visualization | Plotly | Funnel and distribution charts |
 | Spreadsheet | openpyxl | Excel quotation and customer exports |
-| AI | OpenAI Python SDK | Optional structured inquiry analysis |
+| Optional analysis | OpenAI Python SDK | Explicitly enabled structured inquiry analysis |
 | Testing | pytest / pytest-cov | Unit and integration testing |
 
 ## 6. Database Design
@@ -204,7 +205,7 @@ to two decimal places.
 
 ```bash
 git clone <your-repository-url>
-cd "AI-Powered B2B Export Sales Intelligence System"
+cd your-project-folder
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -259,17 +260,17 @@ python -m pytest --cov=services --cov=database --cov-report=term-missing
 
 ## 12. Screenshots
 
-### Dashboard
+### Analyze Inquiry — English
 
-![Dashboard with lead-quality and funnel KPIs](assets/screenshots/dashboard.png)
+![English Analyze Inquiry workspace](assets/screenshots/phase1-analyze-en.png)
 
-### Inquiry analyzer
+### 分析询盘 — 中文
 
-![Rule-based RFQ extraction and next questions](assets/screenshots/inquiry-analyzer.png)
+![中文分析询盘工作台](assets/screenshots/phase1-analyze-zh.png)
 
-### Quotation calculator
+### Mobile layout
 
-![Gross Margin and Markup quotation workflow](assets/screenshots/quotation-calculator.png)
+![Responsive mobile Analyze Inquiry workspace](assets/screenshots/phase1-analyze-mobile.png)
 
 The screenshots use only fictional portfolio data. Additional deployment
 screenshots can be added under `assets/screenshots/`.
@@ -291,30 +292,24 @@ screenshots can be added under `assets/screenshots/`.
 - This application is an educational portfolio system, not legal, customs,
   tax, accounting, or binding commercial advice.
 
-## 14. Future Improvements
+## 14. Current Scope Boundary
 
-- user authentication and role-based access;
-- persistent multi-currency settings and exchange-rate history;
-- email/calendar integrations and automated reminders;
-- quotation approval workflow and PDF templates;
-- HS-code, tariff, and route data integrations;
-- contact deduplication and import field mapping;
-- deployment profiles for PostgreSQL and managed hosting;
-- richer AI evaluation datasets and multilingual inquiry analysis;
-- customer lifetime value and win-probability models after sufficient data is
-  available.
+This release focuses on the professional inquiry-to-quote workflow. ERP/order
+execution, customs-data integrations, automatic email/calendar actions,
+advanced predictive scoring, and other expansion modules are intentionally out
+of scope.
 
 ## 15. Resume Bullet Points
 
-- Built a multipage B2B export-sales intelligence application with Python,
+- Built a multipage B2B export-sales workspace with Python,
   Streamlit, SQLite, Pandas, and Plotly, integrating customer management,
   explainable lead scoring, pipeline analytics, and follow-up workflows.
 - Developed a tested Incoterm quotation engine supporting EXW, FOB, CIF, and DDP
   pricing, CNY-to-USD conversion, Gross Margin versus Markup logic, auditable
   calculation evidence, and Excel quotation generation.
-- Implemented a resilient AI-assisted RFQ analysis pipeline using structured
-  JSON validation, deterministic rule-based fallback, product matching, and
-  privacy-safe fictional demo data across six relational tables.
+- Implemented a resilient RFQ analysis pipeline with structured validation,
+  deterministic rule-based processing, product matching, and privacy-safe
+  fictional demo data across six relational tables.
 
 ## Project Structure
 
@@ -330,7 +325,11 @@ screenshots can be added under `assets/screenshots/`.
 │   ├── products.py
 │   └── settings.py
 ├── components/
-│   └── theme.py
+│   ├── theme.py
+│   └── workflow.py
+├── locales/
+│   ├── en_US.py
+│   └── zh_CN.py
 ├── services/
 │   ├── dashboard.py
 │   ├── scoring.py

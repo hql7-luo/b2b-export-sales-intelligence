@@ -7,10 +7,11 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
+from components.workflow import workflow_rail
 from database.repository import create_follow_up, get_customer, list_customers, list_follow_ups
 from services.followup import follow_up_advice, follow_up_priority, generate_follow_up_message
-from utils.i18n import is_chinese, localize_error, option_label, tr
+from utils.i18n import is_chinese, localize_error, option_label, t, tr
 
 
 FOLLOW_UP_ADVICE_ZH = {
@@ -32,11 +33,11 @@ def _display_advice(stage: str | None) -> str:
 
 
 page_header(
-    tr("Follow-up Tracker", "客户跟进管理"),
-    tr("Prioritize overdue accounts, capture every buyer interaction, and keep the next action explicit.", "优先处理逾期客户，记录每次沟通，并明确下一步行动。"),
-    tr("P1 · Relationship cadence", "P1 · 客户关系节奏"),
+    t("page.followup.title"),
+    t("page.followup.subtitle"),
+    t("page.followup.section"),
 )
-operations_ledger()
+workflow_rail("follow_up")
 
 customers = list_customers()
 today = date.today()

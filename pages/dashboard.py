@@ -6,20 +6,16 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
 from services.dashboard import dashboard_snapshot
-from utils.i18n import is_chinese, option_label, tr
+from utils.i18n import is_chinese, option_label, t, tr
 
 
 page_header(
-    tr("Sales Intelligence Dashboard", "销售智能仪表盘"),
-    tr(
-        "A lead-to-order view of portfolio quality, commercial activity, and the next work that protects revenue.",
-        "从线索到订单，集中查看客户质量、商务进展和最需要处理的下一步工作。",
-    ),
-    tr("P0 · Decision cockpit", "P0 · 销售决策中心"),
+    t("page.analytics.title"),
+    t("page.analytics.subtitle"),
+    t("page.analytics.section"),
 )
-operations_ledger()
 
 snapshot = dashboard_snapshot()
 metrics = snapshot["metrics"]

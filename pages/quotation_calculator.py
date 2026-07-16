@@ -8,12 +8,13 @@ from decimal import Decimal
 import pandas as pd
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
+from components.workflow import workflow_rail
 from database.repository import create_quotation, list_customers, list_quotations
 from services.excel_service import quotation_to_excel
 from services.quotation import calculate_quotation
 from utils.constants import INCOTERM_DESCRIPTIONS
-from utils.i18n import localize_error, option_label, tr
+from utils.i18n import localize_error, option_label, t, tr
 
 
 INCOTERM_DESCRIPTIONS_ZH = {
@@ -29,11 +30,11 @@ def _term_description(term: str) -> str:
 
 
 page_header(
-    tr("Quotation Calculator", "出口报价计算器"),
-    tr("Build a traceable USD quotation from CNY costs and compare the commercial effect of Gross Margin versus Markup.", "根据人民币成本生成可追溯的美元报价，并比较毛利率与加成率两种定价方式。"),
-    tr("P0 · Commercial decision", "P0 · 商务定价决策"),
+    t("page.quotation.title"),
+    t("page.quotation.subtitle"),
+    t("page.quotation.section"),
 )
-operations_ledger()
+workflow_rail("prepare")
 
 st.markdown(
     f"""
