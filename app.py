@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from components.theme import apply_theme
 from components.workflow import ensure_workflow_context
-from database.connection import DEFAULT_DB_PATH
+from database.connection import resolve_database_path
 from database.init_db import initialize_database
 from database.seed_data import seed_demo_data
 from utils.i18n import LANGUAGE_KEY, t
@@ -28,10 +28,11 @@ st.set_page_config(
 )
 
 # 首次启动时创建演示库；之后尊重用户对数据的修改和删除。
-is_first_run = not DEFAULT_DB_PATH.exists()
-initialize_database()
+database_path = resolve_database_path()
+is_first_run = not database_path.exists()
+initialize_database(database_path)
 if is_first_run:
-    seed_demo_data()
+    seed_demo_data(database_path)
 apply_theme()
 
 language_space, language_control = st.columns([8.5, 1.5], vertical_alignment="center")

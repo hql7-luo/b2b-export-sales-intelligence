@@ -5,7 +5,11 @@ from __future__ import annotations
 import sqlite3
 
 from database.connection import get_connection
-from database.migrations import WORKFLOW_RELATIONSHIP_MIGRATION, apply_migrations
+from database.migrations import (
+    SETTINGS_MIGRATION,
+    WORKFLOW_RELATIONSHIP_MIGRATION,
+    apply_migrations,
+)
 
 
 LEGACY_SCHEMA_SQL = """
@@ -78,7 +82,7 @@ def test_workflow_relationship_migration_is_idempotent_and_preserves_legacy_data
     first = apply_migrations(db_path)
     second = apply_migrations(db_path)
 
-    assert first == [WORKFLOW_RELATIONSHIP_MIGRATION]
+    assert first == [WORKFLOW_RELATIONSHIP_MIGRATION, SETTINGS_MIGRATION]
     assert second == []
 
     connection = get_connection(db_path)
@@ -107,7 +111,11 @@ def test_workflow_relationship_migration_is_idempotent_and_preserves_legacy_data
         ).fetchone()["product_name"] == "Fictional Legacy Notebook"
         assert connection.execute(
             "SELECT COUNT(*) AS count FROM schema_migrations"
-        ).fetchone()["count"] == 1
+        ).fetchone()["count"] == 2
+        assert connection.execute(
+            "SELECT setting_value FROM app_settings "
+            "WHERE setting_key = 'default_exchange_rate'"
+        ).fetchone()["setting_value"] == "7.20"
         assert connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
     finally:

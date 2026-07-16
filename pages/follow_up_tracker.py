@@ -11,35 +11,30 @@ from components.theme import page_header
 from components.workflow import update_workflow_context, workflow_rail
 from database.repository import list_customers, list_follow_ups, list_quotations
 from services.followup import (
-    follow_up_advice,
-    follow_up_priority,
+    build_follow_up_task_queue,
     generate_follow_up_message,
 )
 from services.workflow import build_follow_up_context, save_follow_up_for_quotation
-from utils.i18n import is_chinese, localize_error, option_label, t, tr
+from utils.constants import STAGES
+from utils.i18n import is_chinese, localize_error, option_label, t
 
 
-FOLLOW_UP_ADVICE_ZH = {
-    "New Lead": "发送简短的首次联系信息，突出产品匹配度和一个可信证明。",
-    "Contacted": "3–5 天后跟进，分享相关产品案例并提出一个明确问题。",
-    "Replied": "总结客户需求，并追问尚未确认的商务信息。",
-    "Requirement Confirmed": "报价前确认规格、数量、目的地和目标交期。",
-    "Quoted": "报价后第 2 天跟进；如未回复，第 7 天再次跟进。",
-    "Sample": "样品签收后确认质量反馈，并商定需要调整的内容。",
-    "Negotiation": "从规格、数量或条款优化价格方案，避免只做直接降价。",
-    "Order Confirmed": "确认定金、稿件、生产节点和出货文件。",
-    "Lost": "记录丢单原因，并根据情况安排低频重新激活。",
+ADVICE_KEYS = {
+    "New Lead": "new_lead",
+    "Contacted": "contacted",
+    "Replied": "replied",
+    "Requirement Confirmed": "requirement_confirmed",
+    "Quoted": "quoted",
+    "Sample": "sample",
+    "Negotiation": "negotiation",
+    "Order Confirmed": "order_confirmed",
+    "Lost": "lost",
 }
 
 
 def _display_advice(stage: str | None) -> str:
-    english = follow_up_advice(stage or "")
-    if is_chinese():
-        return FOLLOW_UP_ADVICE_ZH.get(
-            stage or "",
-            "确认客户当前需求，并约定一个明确的下一步行动。",
-        )
-    return english
+    key = ADVICE_KEYS.get(stage or "", "default")
+    return t(f"followup.advice.{key}")
 
 
 def _localized_selectbox(
@@ -87,57 +82,114 @@ queue_tab, record_tab, history_tab = st.tabs(
 )
 
 with queue_tab:
-    queue = []
-    for customer in customers:
-        if customer.get("current_stage") in {"Order Confirmed", "Lost"}:
-            continue
-        due = customer.get("next_follow_up_date")
-        queue.append(
-            {
-                "priority_score": follow_up_priority(
-                    customer.get("effective_grade", "D"),
-                    due,
-                    today,
-                ),
-                "status": (
-                    t("followup.queue.overdue")
-                    if due and str(due) < today.isoformat()
-                    else t("followup.queue.due")
-                ),
-                "company": customer["company_name"],
-                "grade": customer.get("effective_grade"),
-                "stage": customer.get("current_stage"),
-                "next_follow_up": due or t("followup.queue.unscheduled"),
-                "recommended_action": _display_advice(
-                    customer.get("current_stage")
-                ),
-            }
-        )
-    queue.sort(key=lambda row: row["priority_score"], reverse=True)
-    overdue_count = sum(
-        row["status"] == t("followup.queue.overdue") for row in queue
+    records = list_follow_ups()
+    customer_options = {
+        row["customer_id"]: row["company_name"] for row in records
+    }
+    filter_columns = st.columns(4)
+    selected_customer = filter_columns[0].selectbox(
+        t("followup.filter.customer"),
+        [None, *customer_options],
+        format_func=lambda value: (
+            t("common.all") if value is None else customer_options[value]
+        ),
+        key="followup_queue_customer",
     )
-    top_columns = st.columns(3)
+    selected_stage = filter_columns[1].selectbox(
+        t("followup.filter.stage"),
+        [None, *STAGES],
+        format_func=lambda value: (
+            t("common.all") if value is None else option_label(value)
+        ),
+        key="followup_queue_stage",
+    )
+    selected_priority = filter_columns[2].selectbox(
+        t("followup.filter.priority"),
+        [None, "High", "Medium", "Low"],
+        format_func=lambda value: (
+            t("common.all") if value is None else option_label(value)
+        ),
+        key="followup_queue_priority",
+    )
+    date_filters = {
+        "all": t("followup.filter.date.all"),
+        "overdue": t("followup.filter.date.overdue"),
+        "today": t("followup.filter.date.today"),
+        "next_7_days": t("followup.filter.date.next_7"),
+        "future": t("followup.filter.date.future"),
+    }
+    selected_date_filter = filter_columns[3].selectbox(
+        t("followup.filter.date"),
+        list(date_filters),
+        format_func=date_filters.get,
+        key="followup_queue_date",
+    )
+    queue = build_follow_up_task_queue(
+        records,
+        today=today,
+        customer_id=selected_customer,
+        stage=selected_stage,
+        priority=selected_priority,
+        date_filter=selected_date_filter,
+    )
+    top_columns = st.columns(4)
     top_columns[0].metric(t("followup.queue.active"), len(queue))
-    top_columns[1].metric(t("followup.queue.overdue_metric"), overdue_count)
+    top_columns[1].metric(
+        t("followup.queue.overdue_metric"),
+        sum(row["due_bucket"] == "overdue" for row in queue),
+    )
     top_columns[2].metric(
-        t("followup.queue.a_grade"),
-        sum(row["grade"] == "A" for row in queue),
+        t("followup.queue.today_metric"),
+        sum(row["due_bucket"] == "today" for row in queue),
+    )
+    top_columns[3].metric(
+        t("followup.queue.future_metric"),
+        sum(row["due_bucket"] == "upcoming" for row in queue),
     )
     if queue:
-        queue_frame = pd.DataFrame(queue)
-        if is_chinese():
-            queue_frame["stage"] = queue_frame["stage"].map(option_label)
+        queue_frame = pd.DataFrame(
+            [
+                {
+                    "status": t(
+                        f"followup.queue.bucket.{row['due_bucket']}"
+                    ),
+                    "company": row["company_name"],
+                    "inquiry": (
+                        f"#{row['inquiry_id']}"
+                        if row.get("inquiry_id")
+                        else "—"
+                    ),
+                    "quotation": (
+                        f"#{row['quotation_id']}"
+                        if row.get("quotation_id")
+                        else "—"
+                    ),
+                    "stage": option_label(
+                        row.get("customer_stage") or "New Lead"
+                    ),
+                    "priority": option_label(row.get("priority") or "Medium"),
+                    "next_follow_up": (
+                        row.get("next_follow_up_date")
+                        or t("followup.queue.unscheduled")
+                    ),
+                    "recommended_action": _display_advice(
+                        row.get("customer_stage")
+                    ),
+                }
+                for row in queue
+            ]
+        )
         st.dataframe(
             queue_frame,
             width="stretch",
             hide_index=True,
             column_config={
-                "priority_score": t("followup.queue.priority_score"),
                 "status": t("followup.queue.status"),
                 "company": t("followup.queue.company"),
-                "grade": t("followup.queue.grade"),
+                "inquiry": t("followup.queue.inquiry"),
+                "quotation": t("followup.queue.quotation"),
                 "stage": t("followup.queue.stage"),
+                "priority": t("followup.queue.priority"),
                 "next_follow_up": t("followup.queue.next"),
                 "recommended_action": t("followup.queue.action"),
             },
@@ -171,19 +223,19 @@ with record_tab:
             list(source_options),
             key="followup_source_quotation",
         )
-        selected_quotation_id = source_options[selected_source]
+        candidate_quotation_id = source_options[selected_source]
         if st.button(
             t("followup.source.load"),
             type="primary",
             key="followup_source_load",
         ):
-            selected = quotation_by_id[selected_quotation_id]
+            selected = quotation_by_id[candidate_quotation_id]
             update_workflow_context(
                 stage="follow_up",
                 customer_id=selected["customer_id"],
                 inquiry_id=selected["inquiry_id"],
                 product_id=selected.get("product_id"),
-                quotation_id=selected_quotation_id,
+                quotation_id=candidate_quotation_id,
             )
             for key in (
                 "followup_content",
@@ -195,12 +247,15 @@ with record_tab:
             st.rerun()
 
     if selected_quotation_id is None:
-        st.warning(t("followup.source.empty"))
-        if st.button(
-            t("followup.action.return_quote"),
-            key="followup_empty_return",
-        ):
-            st.switch_page("pages/quotation_calculator.py")
+        if quotations:
+            st.caption(t("followup.source.pending"))
+        else:
+            st.warning(t("followup.source.empty"))
+            if st.button(
+                t("followup.action.return_quote"),
+                key="followup_empty_return",
+            ):
+                st.switch_page("pages/quotation_calculator.py")
     else:
         try:
             inherited = build_follow_up_context(

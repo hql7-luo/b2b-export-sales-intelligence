@@ -144,5 +144,8 @@ def localize_error(message: str) -> str:
         "linked customer was not found": "未找到已关联客户。",
         "saved quotation was not found": "未找到已保存报价。",
         "saved quotation is not linked to a customer": "该报价尚未关联客户。",
+        "selected product was not found": "未找到所选产品，请重新选择。",
+        "unmatched product must be verified before saving": "未匹配产品的报价在正式保存前必须完成产品核实。",
+        "exchange rate must be greater than zero": "汇率必须大于 0。",
     }
     return known.get(message, f"操作未完成：{message}")

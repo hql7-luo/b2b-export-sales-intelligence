@@ -660,6 +660,53 @@ def get_inquiry(
         connection.close()
 
 
+def update_inquiry_matched_product(
+    inquiry_id: int,
+    product_id: int | None,
+    db_path: str | Path | None = None,
+) -> bool:
+    """Persist a manual or repeated product match for an existing inquiry."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        inquiry = connection.execute(
+            "SELECT customer_id FROM inquiries WHERE id = ?",
+            (inquiry_id,),
+        ).fetchone()
+        if inquiry is None:
+            return False
+        if product_id is not None:
+            product = connection.execute(
+                "SELECT id, product_name FROM products WHERE id = ?",
+                (product_id,),
+            ).fetchone()
+            if product is None:
+                raise ValueError("selected product was not found")
+        else:
+            product = None
+        connection.execute(
+            "UPDATE inquiries SET matched_product_id = ? WHERE id = ?",
+            (product_id, inquiry_id),
+        )
+        if inquiry["customer_id"] is not None and product is not None:
+            connection.execute(
+                "INSERT INTO activities "
+                "(customer_id, inquiry_id, activity_type, description, metadata) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    inquiry["customer_id"],
+                    inquiry_id,
+                    "product_matched",
+                    f"Product matched: {product['product_name']}",
+                    json.dumps({"product_id": product_id}),
+                ),
+            )
+        connection.commit()
+        return True
+    finally:
+        connection.close()
+
+
 def create_follow_up(
     follow_up: Mapping[str, Any], db_path: str | Path | None = None
 ) -> int:
@@ -820,6 +867,41 @@ def list_products(
         connection.close()
 
 
+def list_products_with_match_counts(
+    *,
+    search: str | None = None,
+    category: str | None = None,
+    db_path: str | Path | None = None,
+) -> list[dict[str, Any]]:
+    """List compact product facts with persisted inquiry-match usage."""
+    conditions: list[str] = []
+    parameters: list[Any] = []
+    if search:
+        conditions.append(
+            "(p.product_name LIKE ? OR p.application LIKE ? "
+            "OR p.specification LIKE ? OR p.material LIKE ?)"
+        )
+        pattern = f"%{search.strip()}%"
+        parameters.extend([pattern] * 4)
+    if category:
+        conditions.append("p.category = ?")
+        parameters.append(category)
+    where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT p.*, COUNT(DISTINCT i.id) AS matched_inquiry_count "
+            "FROM products p "
+            "LEFT JOIN inquiries i ON i.matched_product_id = p.id"
+            f"{where} GROUP BY p.id ORDER BY p.category, p.product_name",
+            tuple(parameters),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        connection.close()
+
+
 def update_product(
     product_id: int, changes: Mapping[str, Any], db_path: str | Path | None = None
 ) -> bool:
@@ -845,6 +927,58 @@ def delete_product(product_id: int, db_path: str | Path | None = None) -> bool:
         cursor = connection.execute("DELETE FROM products WHERE id = ?", (product_id,))
         connection.commit()
         return cursor.rowcount > 0
+    finally:
+        connection.close()
+
+
+def get_setting(
+    setting_key: str,
+    *,
+    db_path: str | Path | None = None,
+) -> str | None:
+    """Read one persisted workspace setting."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        row = connection.execute(
+            "SELECT setting_value FROM app_settings WHERE setting_key = ?",
+            (setting_key,),
+        ).fetchone()
+        return row["setting_value"] if row else None
+    finally:
+        connection.close()
+
+
+def set_setting(
+    setting_key: str,
+    setting_value: Any,
+    *,
+    db_path: str | Path | None = None,
+) -> None:
+    """Persist one workspace setting with an idempotent upsert."""
+    if not str(setting_key or "").strip():
+        raise ValueError("setting_key is required")
+    value = str(setting_value).strip()
+    if setting_key == "default_exchange_rate":
+        try:
+            if float(value) <= 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError("exchange rate must be greater than zero") from None
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        connection.execute(
+            """
+            INSERT INTO app_settings (setting_key, setting_value)
+            VALUES (?, ?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (setting_key, value),
+        )
+        connection.commit()
     finally:
         connection.close()
 
