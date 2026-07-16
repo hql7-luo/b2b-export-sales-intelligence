@@ -9,11 +9,13 @@ import streamlit as st
 
 from components.theme import page_header
 from components.workflow import update_workflow_context, workflow_rail
-from database.repository import create_inquiry, list_customers, list_inquiries, list_products
+from database.repository import list_customers, list_inquiries, list_products
 from services.inquiry_analyzer import analyze_inquiry
 from services.inquiry_brief import build_inquiry_brief
 from services.product_match import recommend_products
+from services.workflow import save_inquiry_for_customer
 from utils.i18n import LANGUAGE_KEY, localize_error, t, tr
+from utils.validation import is_valid_email
 
 
 page_header(
@@ -228,40 +230,90 @@ with analyze_tab:
                     st.markdown(f"**{action['title']}**")
                     st.caption(action["text"])
 
+        st.subheader(t("inquiry.customer.title"))
+        st.caption(t("inquiry.customer.caption"))
         customers = list_customers()
         customer_by_id = {row["id"]: row for row in customers}
-        options = {
-            0: t("inquiry.customer.none"),
-            **{
-                customer_id: customer["company_name"]
-                for customer_id, customer in customer_by_id.items()
-            },
-        }
         context_customer_id = st.session_state.get("workflow_context", {}).get(
             "customer_id"
         )
-        if (
-            "inquiry_customer_selection" not in st.session_state
-            or st.session_state["inquiry_customer_selection"] not in options
-        ):
-            st.session_state["inquiry_customer_selection"] = (
-                context_customer_id if context_customer_id in options else 0
+        customer_modes = ["existing", "new"] if customers else ["new"]
+        if st.session_state.get("inquiry_customer_mode") not in customer_modes:
+            st.session_state["inquiry_customer_mode"] = customer_modes[0]
+        st.caption(t("inquiry.customer.mode"))
+        mode_columns = st.columns(len(customer_modes))
+        for column, mode in zip(mode_columns, customer_modes):
+            if column.button(
+                t(f"inquiry.customer.mode.{mode}"),
+                type=(
+                    "primary"
+                    if st.session_state["inquiry_customer_mode"] == mode
+                    else "secondary"
+                ),
+                width="stretch",
+                key=f"inquiry_customer_mode_{mode}",
+            ):
+                st.session_state["inquiry_customer_mode"] = mode
+                st.rerun()
+        customer_mode = st.session_state["inquiry_customer_mode"]
+        linked_customer = None
+        new_customer = None
+        if customer_mode == "existing":
+            customer_ids = list(customer_by_id)
+            if (
+                "inquiry_customer_selection" not in st.session_state
+                or st.session_state["inquiry_customer_selection"] not in customer_ids
+            ):
+                st.session_state["inquiry_customer_selection"] = (
+                    context_customer_id
+                    if context_customer_id in customer_ids
+                    else customer_ids[0]
+                )
+            linked_customer = st.selectbox(
+                t("inquiry.customer.select"),
+                customer_ids,
+                format_func=lambda customer_id: customer_by_id[customer_id][
+                    "company_name"
+                ],
+                key="inquiry_customer_selection",
             )
-        selected_customer = st.selectbox(
-            t("inquiry.customer.select"),
-            list(options),
-            format_func=options.get,
-            key="inquiry_customer_selection",
-        )
-        linked_customer = selected_customer or None
-        update_workflow_context(
-            customer_id=linked_customer,
-            customer_name=(
-                customer_by_id[linked_customer]["company_name"]
-                if linked_customer in customer_by_id
-                else ""
-            ),
-        )
+            update_workflow_context(
+                customer_id=linked_customer,
+                customer_name=customer_by_id[linked_customer]["company_name"],
+                country=customer_by_id[linked_customer].get("country") or "",
+            )
+        else:
+            new_left, new_right = st.columns(2)
+            company_name = new_left.text_input(
+                t("inquiry.customer.company"),
+                key="inquiry_new_company",
+            )
+            contact_name = new_right.text_input(
+                t("inquiry.customer.contact"),
+                key="inquiry_new_contact",
+            )
+            country = new_left.text_input(
+                t("inquiry.customer.country"),
+                key="inquiry_new_country",
+            )
+            email = new_right.text_input(
+                t("inquiry.customer.email"),
+                placeholder="buyer@fictional-company.example.com",
+                key="inquiry_new_email",
+            )
+            new_customer = {
+                "company_name": company_name.strip(),
+                "contact_name": contact_name.strip(),
+                "country": country.strip(),
+                "email": email.strip(),
+                "lead_source": "Website",
+                "product_interest": (
+                    selected_match["product_name"]
+                    if selected_product_id is not None
+                    else result["extracted_fields"].get("product") or ""
+                ),
+                "current_stage": "New Lead",
+            }
         save_column, quote_column = st.columns(2)
         if save_column.button(
             t("inquiry.action.save"),
@@ -270,32 +322,60 @@ with analyze_tab:
             key="save_inquiry",
         ):
             analysis_to_save = {**result, "suggested_reply": edited_reply}
-            inquiry_id = create_inquiry(
-                customer_id=linked_customer,
-                raw_text=st.session_state["inquiry_text"],
-                analysis=analysis_to_save,
-                analysis_mode=run.mode,
-            )
-            st.session_state["saved_inquiry_id"] = inquiry_id
-            update_workflow_context(
-                inquiry_id=inquiry_id,
-                customer_id=linked_customer,
-                product_id=selected_product_id,
-                analysis_result=analysis_to_save,
-                edited_reply=edited_reply,
-            )
-            st.success(t("inquiry.save.success", inquiry_id=inquiry_id))
+            if customer_mode == "new" and not new_customer["company_name"]:
+                st.error(t("inquiry.customer.error.company"))
+            elif customer_mode == "new" and not is_valid_email(new_customer["email"]):
+                st.error(t("inquiry.customer.error.email"))
+            else:
+                try:
+                    saved_context = save_inquiry_for_customer(
+                        existing_customer_id=linked_customer,
+                        new_customer=new_customer if customer_mode == "new" else None,
+                        raw_text=st.session_state["inquiry_text"],
+                        analysis=analysis_to_save,
+                        analysis_mode=run.mode,
+                        matched_product_id=selected_product_id,
+                    )
+                    inquiry_id = saved_context["inquiry_id"]
+                    st.session_state["saved_inquiry_id"] = inquiry_id
+                    st.session_state["saved_customer_id"] = saved_context[
+                        "customer_id"
+                    ]
+                    update_workflow_context(
+                        inquiry_id=inquiry_id,
+                        customer_id=saved_context["customer_id"],
+                        customer_name=saved_context["customer_name"],
+                        product_id=selected_product_id,
+                        analysis_result=analysis_to_save,
+                        edited_reply=edited_reply,
+                    )
+                    st.success(
+                        t(
+                            "inquiry.save.success_new"
+                            if saved_context["customer_created"]
+                            else "inquiry.save.success_existing",
+                            customer_name=saved_context["customer_name"],
+                            inquiry_id=inquiry_id,
+                        )
+                    )
+                except ValueError as exc:
+                    st.error(localize_error(str(exc)))
         saved_inquiry_id = st.session_state.get("saved_inquiry_id")
         if quote_column.button(
             t("inquiry.action.prepare_quote"),
             width="stretch",
             key="prepare_quotation",
-            disabled=not (saved_inquiry_id and linked_customer),
+            disabled=not (saved_inquiry_id and selected_product_id),
         ):
-            update_workflow_context(stage="prepare")
+            update_workflow_context(
+                stage="prepare",
+                customer_id=st.session_state.get("saved_customer_id"),
+                inquiry_id=saved_inquiry_id,
+                product_id=selected_product_id,
+            )
             st.switch_page("pages/quotation_calculator.py")
-        if saved_inquiry_id and not linked_customer:
-            st.info(t("inquiry.save.customer_required"))
+        if saved_inquiry_id and not selected_product_id:
+            st.info(t("inquiry.save.product_required"))
         elif not saved_inquiry_id:
             st.caption(t("inquiry.save.first"))
 

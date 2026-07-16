@@ -135,5 +135,14 @@ def localize_error(message: str) -> str:
         "product_name is required": "产品名称为必填项。",
         "follow_up_date is required": "联系日期为必填项。",
         "content is required": "沟通内容为必填项。",
+        "customer is required before saving the inquiry": "保存询盘前必须关联或创建客户。",
+        "selected customer was not found": "未找到所选客户，请重新选择。",
+        "choose either an existing customer or a new customer": "请选择关联已有客户或创建新客户，不要同时提交两种方式。",
+        "quantity is required before creating a quotation": "创建报价前必须确认数量。",
+        "saved inquiry was not found": "未找到已保存询盘，请返回询盘页面重新保存。",
+        "saved inquiry is not linked to a customer": "该询盘尚未关联客户。",
+        "linked customer was not found": "未找到已关联客户。",
+        "saved quotation was not found": "未找到已保存报价。",
+        "saved quotation is not linked to a customer": "该报价尚未关联客户。",
     }
     return known.get(message, f"操作未完成：{message}")

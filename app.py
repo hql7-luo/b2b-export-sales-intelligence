@@ -14,6 +14,11 @@ from utils.i18n import LANGUAGE_KEY, t
 
 load_dotenv()
 st.session_state.setdefault(LANGUAGE_KEY, "en")
+language_control_key = "_ui_language_control"
+control_language = st.session_state.get(language_control_key)
+if control_language in {"en", "zh"}:
+    st.session_state[LANGUAGE_KEY] = control_language
+st.session_state[language_control_key] = st.session_state[LANGUAGE_KEY]
 ensure_workflow_context()
 
 st.set_page_config(
@@ -36,14 +41,16 @@ with language_space:
         unsafe_allow_html=True,
     )
 with language_control:
-    st.segmented_control(
+    selected_language = st.segmented_control(
         t("app.language.label"),
         options=["en", "zh"],
         format_func=lambda value: "EN" if value == "en" else "中文",
-        key=LANGUAGE_KEY,
+        key=language_control_key,
         label_visibility="collapsed",
         width="stretch",
     )
+    if selected_language in {"en", "zh"}:
+        st.session_state[LANGUAGE_KEY] = selected_language
 
 pages = {
     t("nav.group.workflow"): [

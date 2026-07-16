@@ -54,7 +54,11 @@ SCORING_INPUT_FIELDS = {
 
 QUOTATION_FIELDS = {
     "customer_id",
+    "inquiry_id",
+    "product_id",
     "product_name",
+    "specification",
+    "destination",
     "quotation_date",
     "incoterm",
     "quantity",
@@ -84,6 +88,9 @@ QUOTATION_FIELDS = {
 
 FOLLOW_UP_FIELDS = {
     "customer_id",
+    "inquiry_id",
+    "quotation_id",
+    "customer_stage",
     "follow_up_date",
     "communication_type",
     "content",
@@ -142,6 +149,39 @@ def _customer_from_row(row: Any) -> dict[str, Any] | None:
     return customer
 
 
+def _inquiry_from_row(row: Any) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    inquiry = dict(row)
+    for key in (
+        "confirmed_info",
+        "missing_info",
+        "risks",
+        "next_questions",
+        "analysis_json",
+    ):
+        try:
+            inquiry[key] = json.loads(
+                inquiry.get(key) or ("{}" if key == "analysis_json" else "[]")
+            )
+        except (TypeError, json.JSONDecodeError):
+            inquiry[key] = {} if key == "analysis_json" else []
+    return inquiry
+
+
+def _quotation_from_row(row: Any) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    quotation = dict(row)
+    try:
+        quotation["calculation_json"] = json.loads(
+            quotation.get("calculation_json") or "{}"
+        )
+    except (TypeError, json.JSONDecodeError):
+        quotation["calculation_json"] = {}
+    return quotation
+
+
 def _scored_values(customer: Mapping[str, Any]) -> dict[str, Any]:
     result = score_customer(customer)
     return {
@@ -181,7 +221,7 @@ def create_customer(
         connection.execute(
             "INSERT INTO activities (customer_id, activity_type, description) "
             "VALUES (?, ?, ?)",
-            (customer_id, "Customer Created", "Customer record created"),
+            (customer_id, "customer_saved", "Customer record saved"),
         )
         connection.commit()
         return customer_id
@@ -234,7 +274,7 @@ def create_customers_batch(
             connection.execute(
                 "INSERT INTO activities (customer_id, activity_type, description) "
                 "VALUES (?, ?, ?)",
-                (customer_id, "Customer Created", "Customer record imported"),
+                (customer_id, "customer_saved", "Customer record imported"),
             )
         connection.commit()
         return customer_ids
@@ -442,14 +482,28 @@ def create_quotation(
         quotation_id = int(cursor.lastrowid)
         if values.get("customer_id") is not None:
             connection.execute(
-                "INSERT INTO activities (customer_id, activity_type, description, metadata) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO activities "
+                "(customer_id, inquiry_id, quotation_id, activity_type, "
+                "description, metadata) VALUES (?, ?, ?, ?, ?, ?)",
                 (
                     values["customer_id"],
-                    "Quotation Saved",
-                    f"{values['incoterm']} quotation saved for {values['product_name']}",
-                    json.dumps({"quotation_id": quotation_id}),
+                    values.get("inquiry_id"),
+                    quotation_id,
+                    "quotation_created",
+                    f"{values['incoterm']} quotation created for {values['product_name']}",
+                    json.dumps(
+                        {
+                            "quotation_id": quotation_id,
+                            "product_id": values.get("product_id"),
+                        }
+                    ),
                 ),
+            )
+            connection.execute(
+                "UPDATE customers SET current_stage = 'Quoted', "
+                "updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = ? AND current_stage NOT IN ('Order Confirmed', 'Lost')",
+                (values["customer_id"],),
             )
         connection.commit()
         return quotation_id
@@ -470,15 +524,29 @@ def list_quotations(
     sql += " ORDER BY quotation_date DESC, id DESC"
     connection = get_connection(db_path)
     try:
-        records = [dict(row) for row in connection.execute(sql, parameters).fetchall()]
+        records = [
+            _quotation_from_row(row)
+            for row in connection.execute(sql, parameters).fetchall()
+        ]
     finally:
         connection.close()
-    for record in records:
-        try:
-            record["calculation_json"] = json.loads(record.get("calculation_json") or "{}")
-        except (TypeError, json.JSONDecodeError):
-            record["calculation_json"] = {}
     return records
+
+
+def get_quotation(
+    quotation_id: int, db_path: str | Path | None = None
+) -> dict[str, Any] | None:
+    """Return one quotation with its calculation evidence decoded."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM quotations WHERE id = ?",
+            (quotation_id,),
+        ).fetchone()
+        return _quotation_from_row(row)
+    finally:
+        connection.close()
 
 
 def create_inquiry(
@@ -487,6 +555,7 @@ def create_inquiry(
     raw_text: str,
     analysis: Mapping[str, Any],
     analysis_mode: str,
+    matched_product_id: int | None = None,
     db_path: str | Path | None = None,
 ) -> int:
     """Persist the normalized inquiry-analysis contract."""
@@ -495,6 +564,7 @@ def create_inquiry(
     fields = dict(analysis.get("extracted_fields") or {})
     values = {
         "customer_id": customer_id,
+        "matched_product_id": matched_product_id,
         "raw_text": str(raw_text).strip(),
         **{key: fields.get(key) for key in (
             "product", "specification", "quantity", "application",
@@ -522,14 +592,30 @@ def create_inquiry(
         inquiry_id = int(cursor.lastrowid)
         if customer_id is not None:
             connection.execute(
-                "INSERT INTO activities (customer_id, activity_type, description, metadata) VALUES (?, ?, ?, ?)",
+                "INSERT INTO activities "
+                "(customer_id, inquiry_id, activity_type, description, metadata) "
+                "VALUES (?, ?, ?, ?, ?)",
                 (
                     customer_id,
-                    "Inquiry Analyzed",
+                    inquiry_id,
+                    "inquiry_created",
                     f"Inquiry analyzed in {values['analysis_mode']} mode",
                     json.dumps({"inquiry_id": inquiry_id}),
                 ),
             )
+            if matched_product_id is not None:
+                connection.execute(
+                    "INSERT INTO activities "
+                    "(customer_id, inquiry_id, activity_type, description, metadata) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (
+                        customer_id,
+                        inquiry_id,
+                        "product_matched",
+                        "Product matched to inquiry",
+                        json.dumps({"product_id": matched_product_id}),
+                    ),
+                )
         connection.commit()
         return inquiry_id
     finally:
@@ -549,16 +635,29 @@ def list_inquiries(
     sql += " ORDER BY inquiry_date DESC, id DESC"
     connection = get_connection(db_path)
     try:
-        records = [dict(row) for row in connection.execute(sql, parameters).fetchall()]
+        records = [
+            _inquiry_from_row(row)
+            for row in connection.execute(sql, parameters).fetchall()
+        ]
     finally:
         connection.close()
-    for record in records:
-        for key in ("confirmed_info", "missing_info", "risks", "next_questions", "analysis_json"):
-            try:
-                record[key] = json.loads(record.get(key) or ("{}" if key == "analysis_json" else "[]"))
-            except (TypeError, json.JSONDecodeError):
-                record[key] = {} if key == "analysis_json" else []
     return records
+
+
+def get_inquiry(
+    inquiry_id: int, db_path: str | Path | None = None
+) -> dict[str, Any] | None:
+    """Return one persisted inquiry with decoded analysis fields."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM inquiries WHERE id = ?",
+            (inquiry_id,),
+        ).fetchone()
+        return _inquiry_from_row(row)
+    finally:
+        connection.close()
 
 
 def create_follow_up(
@@ -576,6 +675,13 @@ def create_follow_up(
     columns = list(values)
     connection = get_connection(db_path)
     try:
+        if not values.get("customer_stage"):
+            row = connection.execute(
+                "SELECT current_stage FROM customers WHERE id = ?",
+                (values["customer_id"],),
+            ).fetchone()
+            values["customer_stage"] = row["current_stage"] if row else None
+            columns = list(values)
         cursor = connection.execute(
             f"INSERT INTO follow_ups ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
             tuple(values[column] for column in columns),
@@ -587,14 +693,23 @@ def create_follow_up(
             (values["follow_up_date"], values.get("next_follow_up_date"), values["customer_id"]),
         )
         connection.execute(
-            "INSERT INTO activities (customer_id, activity_type, activity_date, description, metadata) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO activities "
+            "(customer_id, inquiry_id, quotation_id, activity_type, "
+            "description, metadata) VALUES (?, ?, ?, ?, ?, ?)",
             (
                 values["customer_id"],
-                values.get("communication_type") or "Follow-up",
-                values["follow_up_date"],
+                values.get("inquiry_id"),
+                values.get("quotation_id"),
+                "follow_up_scheduled",
                 values["content"],
-                json.dumps({"follow_up_id": follow_up_id, "outcome": values.get("outcome")}),
+                json.dumps(
+                    {
+                        "follow_up_id": follow_up_id,
+                        "follow_up_date": values["follow_up_date"],
+                        "next_follow_up_date": values.get("next_follow_up_date"),
+                        "outcome": values.get("outcome"),
+                    }
+                ),
             ),
         )
         connection.commit()
@@ -622,6 +737,31 @@ def list_follow_ups(
         return [dict(row) for row in connection.execute(sql, parameters).fetchall()]
     finally:
         connection.close()
+
+
+def list_customer_timeline(
+    customer_id: int, db_path: str | Path | None = None
+) -> list[dict[str, Any]]:
+    """Return a customer's auditable workflow events in creation order."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        rows = connection.execute(
+            "SELECT * FROM activities WHERE customer_id = ? "
+            "ORDER BY activity_date ASC, id ASC",
+            (customer_id,),
+        ).fetchall()
+    finally:
+        connection.close()
+    timeline = []
+    for row in rows:
+        event = dict(row)
+        try:
+            event["metadata"] = json.loads(event.get("metadata") or "{}")
+        except (TypeError, json.JSONDecodeError):
+            event["metadata"] = {}
+        timeline.append(event)
+    return timeline
 
 
 def create_product(product: Mapping[str, Any], db_path: str | Path | None = None) -> int:

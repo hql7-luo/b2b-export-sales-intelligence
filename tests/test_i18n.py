@@ -49,3 +49,32 @@ def test_interface_and_readme_do_not_expose_local_absolute_paths() -> None:
         source = path.read_text(encoding="utf-8")
         assert "/Users/" not in source, path
         assert "/home/" not in source, path
+
+
+def test_core_quotation_fields_are_inherited_without_duplicate_input_widgets() -> None:
+    source = Path("pages/quotation_calculator.py").read_text(encoding="utf-8")
+    forbidden_widget_keys = (
+        "quote_customer",
+        "quote_product_name",
+        "quote_quantity",
+        "quote_specification",
+        "quote_destination",
+        "quote_inquiry_id",
+        "quote_product_id",
+        "quote_customer_id",
+    )
+    assert not any(key in source for key in forbidden_widget_keys)
+    assert "build_quotation_context" in source
+
+
+def test_core_follow_up_relationships_are_inherited_without_duplicate_widgets() -> None:
+    source = Path("pages/follow_up_tracker.py").read_text(encoding="utf-8")
+    forbidden_widget_keys = (
+        "followup_customer_id",
+        "followup_inquiry_id",
+        "followup_quotation_id",
+        "followup_customer_stage",
+    )
+    assert not any(key in source for key in forbidden_widget_keys)
+    assert "build_follow_up_context" in source
+    assert "save_follow_up_for_quotation" in source
