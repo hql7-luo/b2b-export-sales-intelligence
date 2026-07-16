@@ -1,4 +1,4 @@
-"""Small session-based English/Chinese UI localization helpers."""
+"""Session-based localization with stable keys and a legacy compatibility layer."""
 
 from __future__ import annotations
 
@@ -6,8 +6,11 @@ from typing import Any
 
 import streamlit as st
 
+from locales import TRANSLATIONS
+
 
 LANGUAGE_KEY = "ui_language"
+DEFAULT_LANGUAGE = "en"
 
 VALUE_LABELS_ZH = {
     "New Lead": "新线索",
@@ -73,11 +76,29 @@ SCORE_DIMENSION_LABELS_ZH = {
 
 def is_chinese() -> bool:
     """Return whether the active Streamlit session uses Chinese UI text."""
-    return st.session_state.get(LANGUAGE_KEY, "en") == "zh"
+    return st.session_state.get(LANGUAGE_KEY, DEFAULT_LANGUAGE) == "zh"
+
+
+def translate(key: str, language: str = DEFAULT_LANGUAGE, **values: Any) -> str:
+    """Translate a stable key, falling back to English and then readable text."""
+    selected = TRANSLATIONS.get(language, TRANSLATIONS[DEFAULT_LANGUAGE])
+    template = selected.get(key) or TRANSLATIONS[DEFAULT_LANGUAGE].get(key)
+    if template is None:
+        template = TRANSLATIONS[DEFAULT_LANGUAGE]["i18n.missing"]
+    try:
+        return template.format(**values)
+    except (KeyError, ValueError):
+        return template
+
+
+def t(key: str, **values: Any) -> str:
+    """Translate a stable interface key for the active Streamlit session."""
+    language = st.session_state.get(LANGUAGE_KEY, DEFAULT_LANGUAGE)
+    return translate(key, language=language, **values)
 
 
 def tr(english: str, chinese: str) -> str:
-    """Choose one of two explicit interface strings for the active language."""
+    """Choose legacy inline copy while pages migrate to stable translation keys."""
     return chinese if is_chinese() else english
 
 

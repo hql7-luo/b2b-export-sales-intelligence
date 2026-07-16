@@ -7,7 +7,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
 from database.repository import (
     create_customer,
     create_customers_batch,
@@ -20,7 +20,7 @@ from database.repository import (
 from services.excel_service import customers_to_excel, import_customer_file
 from services.scoring import score_customer
 from utils.constants import IMPORT_FREQUENCIES, LEAD_SOURCES, STAGES
-from utils.i18n import is_chinese, localize_error, option_label, score_dimension_label, tr
+from utils.i18n import is_chinese, localize_error, option_label, score_dimension_label, t, tr
 from utils.validation import is_valid_email, is_valid_url, normalize_date
 
 
@@ -155,11 +155,10 @@ def _validate_customer(payload: dict) -> None:
 
 
 page_header(
-    tr("Customer Management", "客户管理"),
-    tr("Keep lead data clean, score quality transparently, and move every account toward one next action.", "保持线索数据整洁、透明评估客户质量，并为每个客户明确下一步行动。"),
-    tr("P0 · Lead operations", "P0 · 线索运营"),
+    t("page.customers.title"),
+    t("page.customers.subtitle"),
+    t("page.customers.section"),
 )
-operations_ledger()
 
 customers = list_customers()
 pipeline_tab, add_tab, edit_tab, transfer_tab = st.tabs(

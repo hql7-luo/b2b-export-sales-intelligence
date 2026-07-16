@@ -1,4 +1,4 @@
-"""Inquiry/RFQ analysis page with optional structured AI."""
+"""Inquiry and RFQ analysis workspace."""
 
 from __future__ import annotations
 
@@ -7,27 +7,23 @@ import os
 import pandas as pd
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
+from components.workflow import update_workflow_context, workflow_rail
 from database.repository import create_inquiry, list_customers, list_inquiries, list_products
 from services.inquiry_analyzer import analyze_inquiry
 from services.product_match import recommend_products
-from utils.i18n import field_label, localize_error, tr
+from utils.i18n import field_label, localize_error, t, tr
 
 
 page_header(
-    tr("Inquiry & RFQ Analyzer", "询盘与 RFQ 分析"),
-    tr("Turn an unstructured buyer message into explicit facts, gaps, commercial risks, and the next questions to ask.", "把非结构化客户消息转化为明确需求、信息缺口、商务风险和下一步追问。"),
-    tr("P1 · Requirement intelligence", "P1 · 需求智能"),
+    t("page.inquiry.title"),
+    t("page.inquiry.subtitle"),
+    t("page.inquiry.section"),
 )
-operations_ledger()
+workflow_rail("analyze")
 
 api_key = os.getenv("OPENAI_API_KEY", "").strip()
 model = os.getenv("OPENAI_MODEL", "gpt-5-mini").strip() or "gpt-5-mini"
-if api_key:
-    st.success(tr(f"AI mode is available · {model}", f"AI 模式可用 · {model}"))
-else:
-    st.info(tr("AI is not enabled. The deterministic rule engine remains fully available; configure OPENAI_API_KEY in .env to enable AI.", "AI 尚未启用；确定性规则引擎仍可完整使用。如需 AI，请在 `.env` 中配置 OPENAI_API_KEY。"))
-
 analyze_tab, history_tab = st.tabs([tr("Analyze inquiry", "分析询盘"), tr("Saved analyses", "已保存分析")])
 
 with analyze_tab:
@@ -36,26 +32,38 @@ with analyze_tab:
         "Please pack each notebook in a paper sleeve and deliver to Hamburg, Germany by 15 October. "
         "Could you quote a pre-production sample and advise T/T payment terms?"
     )
+    st.session_state.setdefault("inquiry_input", "")
+    if st.button(tr("Load fictional demo inquiry", "载入虚拟演示询盘"), key="load_demo_inquiry"):
+        st.session_state["inquiry_input"] = sample
     inquiry_text = st.text_area(
         tr("English inquiry or RFQ *", "英文询盘或 RFQ *"),
-        value=sample,
         height=210,
         max_chars=20_000,
-        help=tr("Maximum 20,000 characters. Remove confidential personal or company data before using AI mode.", "最多 20,000 个字符；使用 AI 前请移除个人或公司的机密信息。"),
+        help=tr("Maximum 20,000 characters. Remove confidential personal or company data before external processing.", "最多 20,000 个字符；如使用外部处理，请先移除个人或公司的机密信息。"),
+        key="inquiry_input",
     )
-    use_ai = st.toggle(tr("Use AI when available", "可用时使用 AI"), value=False, disabled=not api_key)
+    use_ai = st.toggle(tr("Use enhanced analysis when available", "可用时使用增强分析"), value=False, disabled=not api_key, key="use_enhanced_analysis")
     ai_consent = False
     if use_ai:
-        st.warning(tr("AI mode sends this inquiry text to the configured external OpenAI API. Remove confidential data first.", "AI 模式会将询盘文本发送到外部 OpenAI API；请先移除机密信息。"))
-        ai_consent = st.checkbox(tr("I confirm this text is authorized for external AI processing", "我确认该文本已获授权，可用于外部 AI 处理"))
-    if st.button(tr("Analyze requirements", "分析需求"), type="primary"):
+        st.warning(tr("Enhanced analysis sends the inquiry text to the configured external service. Remove confidential data first.", "增强分析会将询盘文本发送到已配置的外部服务；请先移除机密信息。"))
+        ai_consent = st.checkbox(tr("I confirm this text is authorized for external processing", "我确认该文本已获授权，可用于外部处理"), key="external_processing_consent")
+    if st.button(tr("Analyze requirements", "分析需求"), type="primary", key="analyze_inquiry"):
         if use_ai and not ai_consent:
-            st.error(tr("Confirm external AI processing or turn off AI mode.", "请确认外部 AI 处理授权，或关闭 AI 模式。"))
+            st.error(tr("Confirm external processing or turn off enhanced analysis.", "请确认外部处理授权，或关闭增强分析。"))
         else:
             try:
                 run = analyze_inquiry(inquiry_text, api_key=api_key if use_ai else None, model=model)
                 st.session_state["inquiry_run"] = run
                 st.session_state["inquiry_text"] = inquiry_text
+                update_workflow_context(
+                    stage="analyze",
+                    product=run.result["extracted_fields"].get("product") or "",
+                    quantity=run.result["extracted_fields"].get("quantity") or "",
+                    specification=run.result["extracted_fields"].get("specification") or "",
+                    destination=run.result["extracted_fields"].get("destination") or "",
+                    analysis_result=run.result,
+                    edited_reply=run.result.get("suggested_reply", ""),
+                )
             except ValueError as exc:
                 st.error(localize_error(str(exc)))
 
@@ -63,10 +71,10 @@ with analyze_tab:
         run = st.session_state["inquiry_run"]
         result = run.result
         mode_col, score_col, missing_col = st.columns(3)
-        mode_col.metric(tr("Analysis mode", "分析模式"), tr(run.mode, "AI" if run.mode == "ai" else "规则"))
+        mode_col.metric(tr("Analysis mode", "分析模式"), tr("Enhanced" if run.mode == "ai" else "Local rules", "增强分析" if run.mode == "ai" else "本地规则"))
         score_col.metric(tr("Completeness", "完整度"), f"{result['completeness_score']}/100")
         missing_col.metric(tr("Missing fields", "缺失字段"), len(result["missing_info"]))
-        st.caption(tr(run.notice, "分析已完成；AI 不可用时系统会自动使用规则引擎。"))
+        st.caption(tr("Analysis completed using enhanced processing." if run.mode == "ai" else "Analysis completed using local rules.", "分析已完成；当前使用增强处理。" if run.mode == "ai" else "分析已完成；当前使用本地规则。"))
 
         st.subheader(tr("Extracted requirements", "提取的需求"))
         extracted = pd.DataFrame(
@@ -82,13 +90,13 @@ with analyze_tab:
             st.markdown(tr("#### Confirmed information", "#### 已确认信息"))
             if result["confirmed_info"]:
                 for item in result["confirmed_info"]:
-                    st.write(f"✓ {field_label(item)}")
+                    st.write(f"- {field_label(item)}")
             else:
                 st.write(tr("No commercial fields were explicit.", "询盘中没有明确的商务字段。"))
         with missing_info_col:
             st.markdown(tr("#### Missing information", "#### 缺失信息"))
             for item in result["missing_info"]:
-                st.write(f"○ {field_label(item)}")
+                st.write(f"- {field_label(item)}")
 
         risk_col, question_col = st.columns(2)
         with risk_col:

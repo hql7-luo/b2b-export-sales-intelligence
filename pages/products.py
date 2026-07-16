@@ -5,20 +5,16 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from components.theme import operations_ledger, page_header
+from components.theme import page_header
 from database.repository import create_product, list_products
-from utils.i18n import localize_error, tr
+from utils.i18n import localize_error, t, tr
 
 
 page_header(
-    tr("Product Knowledge Base", "产品知识库"),
-    tr(
-        "Keep quotation inputs, production constraints, common questions, and selling points in one searchable reference.",
-        "集中管理报价参数、生产限制、客户常见问题和产品卖点，方便快速检索。",
-    ),
-    tr("P2 · Commercial reference", "P2 · 商务资料"),
+    t("page.products.title"),
+    t("page.products.subtitle"),
+    t("page.products.section"),
 )
-operations_ledger()
 
 browse_tab, add_tab = st.tabs([tr("Browse products", "浏览产品"), tr("Add product", "新增产品")])
 
