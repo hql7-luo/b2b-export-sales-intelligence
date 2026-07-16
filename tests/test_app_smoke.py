@@ -55,3 +55,33 @@ def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
     assert app.segmented_control[0].value == "en"
     assert app.text_area[0].value == "Please quote 2,000 fictional sample cartons to Rotterdam."
     assert app.session_state["workflow_context"]["customer_id"] == 42
+
+
+@pytest.mark.smoke
+def test_analyzed_inquiry_and_edited_reply_survive_language_switch() -> None:
+    app = AppTest.from_file("app.py").run(timeout=20)
+
+    app.button(key="load_demo_inquiry").click().run(timeout=20)
+    assert "5,000 custom hardcover notebooks" in app.text_area(key="inquiry_input").value
+
+    app.button(key="analyze_inquiry").click().run(timeout=20)
+    assert "inquiry_run" in app.session_state
+    assert app.session_state["workflow_context"]["analysis_result"]
+
+    reply = "Dear Customer,\n\nThank you. Please confirm the delivery postcode.\n\nBest regards"
+    app.text_area(key="suggested_reply_editor").set_value(reply).run(timeout=20)
+    app.segmented_control[0].set_value("zh").run(timeout=20)
+
+    assert list(app.exception) == []
+    assert app.text_area(key="suggested_reply_editor").value == reply
+    assert app.session_state["workflow_context"]["analysis_result"]
+    assert app.session_state["workflow_context"]["edited_reply"] == reply
+
+    app.segmented_control[0].set_value("en").run(timeout=20)
+
+    assert list(app.exception) == []
+    assert app.title[0].value == "Analyze Inquiry"
+    assert app.segmented_control[0].value == "en"
+    assert app.text_area(key="suggested_reply_editor").value == reply
+    assert app.session_state["workflow_context"]["analysis_result"]
+    assert app.session_state["workflow_context"]["edited_reply"] == reply

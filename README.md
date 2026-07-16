@@ -260,17 +260,21 @@ python -m pytest --cov=services --cov=database --cov-report=term-missing
 
 ## 12. Screenshots
 
-### Analyze Inquiry — English
+### Analyze Inquiry — Phase 2 English
 
-![English Analyze Inquiry workspace](assets/screenshots/phase1-analyze-en.png)
+![English inquiry brief](assets/screenshots/phase2-inquiry-en.png)
 
-### 分析询盘 — 中文
+### 分析询盘 — Phase 2 中文
 
-![中文分析询盘工作台](assets/screenshots/phase1-analyze-zh.png)
+![中文询盘简报](assets/screenshots/phase2-inquiry-zh.png)
+
+### 中文风险与建议追问
+
+![中文风险与建议追问](assets/screenshots/phase2-inquiry-zh-results.png)
 
 ### Mobile layout
 
-![Responsive mobile Analyze Inquiry workspace](assets/screenshots/phase1-analyze-mobile.png)
+![Responsive mobile Analyze Inquiry workspace](assets/screenshots/phase2-inquiry-mobile.png)
 
 The screenshots use only fictional portfolio data. Additional deployment
 screenshots can be added under `assets/screenshots/`.
