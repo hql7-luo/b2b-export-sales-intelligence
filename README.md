@@ -1,218 +1,214 @@
 # B2B Export Sales Workspace
 
-> An inquiry-to-quote workspace for B2B export sales teams.
+A bilingual, local-first workspace that helps export sales teams turn an
+English buyer message into a traceable customer record, quotation, and
+follow-up task.
 
-![Analyze Inquiry workspace](assets/screenshots/phase1-analyze-en.png)
+The product is organized around one practical workflow:
 
-## 1. Project Overview
+**Analyze Inquiry → Prepare Quotation → Follow Up**
 
-The **B2B Export Sales Workspace** is a local-first web application for export
-sales professionals. It organizes the daily path from a buyer message to a
-saved inquiry, quotation, and follow-up while keeping customer records and
-commercial assumptions traceable.
+It does not attempt to replace an ERP, customs platform, or order-execution
+system. Optional enhanced inquiry analysis is supported, but the complete core
+workflow runs without an API key.
 
-The project demonstrates applied Python programming, SQL data management,
-business analysis, supply-chain knowledge, information-systems design, and
-tested rule-based automation.
+![Business analytics workspace](docs/screenshots/phase4-en-analytics.png)
 
-All bundled companies, people, email addresses, phone numbers, products,
-transactions, and costs are fictional. Demo scenarios use creative-printing and
-packaging products while the data model remains industry-neutral.
+## What problem it solves
 
-## 2. Business Problem
+Export sales work often moves between inboxes, spreadsheets, chat tools, and
+individual memory. That makes it easy to:
 
-Export sales teams often manage leads across spreadsheets, inboxes, messaging
-apps, and individual experience. That creates several operational problems:
+- quote before specifications, quantity, or destination are confirmed;
+- confuse Gross Margin with Markup;
+- re-enter the same customer and inquiry facts on multiple pages;
+- lose the relationship between an inquiry, quotation, and follow-up;
+- miss overdue work or prioritize customers by incomplete profile data alone.
 
-- promising buyers are difficult to prioritize consistently;
-- incomplete RFQs lead to inaccurate quotations and repeated clarification;
-- Gross Margin and Markup are easily confused;
-- international teams need an English/Chinese interface without changing
-  stored business data;
-- logistics and Incoterm cost assumptions are not transparent;
-- overdue follow-ups are missed;
-- customer, pipeline, and revenue data are hard to analyze together.
+This application creates one small operating workspace for those decisions.
+SQLite stores the long-term business relationships; Streamlit Session State is
+used only for temporary page-to-page context.
 
-This system converts those fragmented activities into an explainable,
-traceable lead-to-order workflow.
+## How to use it
 
-## 3. Key Features
+1. Open **Analyze Inquiry** and load the fictional demo inquiry or paste an
+   English RFQ.
+2. Review the request summary, missing information, risks, recommended
+   questions, product match, and editable professional English reply.
+3. Link an existing customer or create a new customer, then save the inquiry.
+4. Open **Create Quotation**. Customer, inquiry, product, quantity,
+   specification, destination, and database IDs are inherited automatically.
+5. Enter costs, exchange rate, pricing method, terms, and validity, then save
+   the quotation.
+6. Create a linked follow-up. The customer, inquiry, quotation, stage, and
+   recommended follow-up date are inherited.
 
-### Core workflow
+The language control in the upper-right switches the interface between English
+and Simplified Chinese without clearing the current workflow context or form
+inputs. Customer-facing suggested replies remain professional English.
 
-- **English / Chinese UI:** a persistent top-right language control localizes
-  navigation, forms, tables, guidance, and quotation formulas while preserving
-  canonical database values.
-- **Analyze Inquiry:** the default workspace turns a buyer message into
-  confirmed requirements, gaps, risks, questions, and a professional English
-  reply draft.
-- **Customer Management:** add, edit, delete, search, filter, CSV/XLSX import,
-  safe Excel export, and complete lead fields.
-- **Create Quotation:** EXW, FOB, CIF, and DDP pricing; CNY-to-USD conversion;
-  Gross Margin and Markup; unit/total quote, gross profit, gross margin, record
-  persistence, commercial terms, and Excel quotation export.
-- **Follow-ups:** due-date prioritization, communication history, next actions,
-  and concise professional English follow-up drafts.
+### End-to-end workflow
 
-### Customer and commercial records
+![Analyzed inquiry](docs/screenshots/phase5-en-inquiry.png)
 
-- **Explainable Lead Scoring:** five visible dimensions totaling 100 points,
-  grade reasoning, field-based automatic rules, and auditable manual overrides.
-- **Traceable records:** SQLite stores customers, inquiries, quotations,
-  follow-ups, products, and activities with foreign-key protection.
-- **Optional enhanced analysis:** when explicitly configured and authorized,
-  inquiry text can use an external structured-analysis service; local rules
-  remain the default and fallback.
+![Prepared quotation](docs/screenshots/phase5-zh-quotation.png)
 
-### Reference and analytics
+![Customer business timeline](docs/screenshots/phase5-en-timeline.png)
 
-- **Product Knowledge Base:** searchable product, cost, MOQ, lead-time,
-  packaging, question, and selling-point records.
-- **Product Matching:** explainable keyword matches between inquiries and the
-  knowledge base.
-- **Analytics:** customer KPIs, lead-quality distribution, sales funnel,
-  country/source distributions, and upcoming follow-ups.
-- **Settings:** quotation conventions, local-data safeguards, and safe fictional
-  demo-data initialization without exposing local absolute paths.
+## Core capabilities
 
-## 4. System Architecture
-
-```mermaid
-flowchart LR
-    U["Export salesperson"] --> UI["Streamlit pages"]
-    UI --> S["Business services"]
-    S --> R["Parameterized repositories"]
-    R --> DB[("SQLite")]
-    S --> X["Excel import/export"]
-    S --> L["Local inquiry rules"]
-    L --> O["Optional external analysis"]
-    O -. "failure or invalid JSON" .-> L
-```
-
-The architecture intentionally stays simple:
-
-- `pages/` contains presentation and user interaction;
-- `services/` contains scoring, pricing, analysis, export, matching, and
-  dashboard logic;
-- `database/` contains connections, schema initialization, repositories, and
-  fictional seed data;
-- `components/` contains reusable visual components;
-- `utils/` contains constants and input validation;
-- `tests/` verifies critical behavior independently of Streamlit.
-
-## 5. Technology Stack
-
-| Layer | Technology | Purpose |
-|---|---|---|
-| Application | Python 3.11+ | Business logic and data workflows |
-| Web UI | Streamlit | Fast multipage business application |
-| Database | SQLite | Portable local relational storage |
-| Analysis | Pandas | Filtering, tabular data, and transfers |
-| Visualization | Plotly | Funnel and distribution charts |
-| Spreadsheet | openpyxl | Excel quotation and customer exports |
-| Optional analysis | OpenAI Python SDK | Explicitly enabled structured inquiry analysis |
-| Testing | pytest / pytest-cov | Unit and integration testing |
-
-## 6. Database Design
-
-SQLite contains six required tables:
-
-| Table | Responsibility |
+| Area | What is included |
 |---|---|
-| `customers` | Lead profile, stage, follow-up dates, automatic/manual scores |
-| `inquiries` | Raw RFQ, extracted fields, risks, questions, reply, JSON evidence |
-| `quotations` | Costs, method, rate, Incoterm, outputs, terms, calculation JSON |
-| `follow_ups` | Communication content, outcome, priority, and next date |
-| `products` | Product specifications, MOQ, costs, lead times, and selling points |
-| `activities` | Auditable customer events such as score overrides and quotations |
+| Inquiry | Demo inquiry, structured summary, graded information gaps, risk categories, recommended questions, editable English reply |
+| Customers | Independent Data Completeness and commercial Lead Quality, filters, next action, editing, import/export, business timeline |
+| Products | Compact specification, MOQ, cost, packaging, sample lead time, production lead time, and match-usage management |
+| Quotations | EXW, FOB, CIF, DDP, CNY-to-USD conversion, Gross Margin or Markup, per-quotation exchange rate, Excel export |
+| Follow-ups | Overdue/today/future task queue, customer/stage/priority/date filters, Inquiry and Quotation references |
+| Analytics | Customer count, Lead Quality distribution, overdue work, conversion rates, funnel, source, and country distributions |
+| Settings | Editable default exchange rate, concise analysis status, fictional demo-data ensure/reset controls |
 
-Foreign keys are enabled, useful fields are indexed, and repository queries use
-parameters instead of concatenating user values into SQL.
+### Professional customer portfolio
 
-Initialize the schema and fictional dataset manually with:
+![Customer portfolio](docs/screenshots/phase4-en-customers.png)
 
-```bash
-python -m database.init_db
-```
+Data Completeness measures whether the customer record is usable. Lead Quality
+is separate and uses commercial value: purchase potential, buying progress,
+persisted inquiry/quotation evidence, and engagement.
 
-The dataset contains exactly 20 customers, 10 inquiries, 8 quotations,
-10 follow-ups, and 6 products. Re-running the seed operation is idempotent.
+### Follow-up task queue
 
-## 7. Lead Scoring Methodology
+![Follow-up task queue](docs/screenshots/phase4-en-followups.png)
 
-The score is intentionally transparent rather than a black-box prediction.
+Tasks are grouped into overdue, today, and future work. Each persisted task
+shows its customer, stage, priority, Inquiry ID, and Quotation ID.
 
-| Dimension | Maximum | Example evidence |
-|---|---:|---|
-| Company authenticity | 20 | company name, business website, domain email, phone |
-| Product fit | 25 | recorded product interest and meaningful product detail |
-| Requirement clarity | 20 | quantity, specification, stage, and inquiry detail |
-| Purchasing capacity | 20 | estimated volume and import frequency |
-| Communication engagement | 15 | pipeline stage and recent contact evidence |
+### Unmatched product handling
 
-Grades:
+![Unmatched product quotation](docs/screenshots/phase4-en-unmatched-quotation.png)
 
-- **A:** 80–100
-- **B:** 65–79
-- **C:** 45–64
-- **D:** 0–44
+An older inquiry without a matched product can be rematched, assigned manually,
+or used to calculate an unmatched draft. Formal saving requires explicit
+product verification.
 
-The customer page shows every dimension and its reason. A user may override the
-automatic score, but an explanation is mandatory and the original automatic
-score remains available for auditability.
+## Quotation logic
 
-## 8. Quotation Logic
-
-All cost inputs default to CNY. The exchange-rate convention is:
+All costs are entered in CNY. The exchange-rate definition is:
 
 ```text
 1 USD = X CNY
-USD quote = CNY quote / X
+USD quote = CNY quote ÷ X
 ```
+
+The workspace setting supplies a default exchange rate. Each quotation can
+override it without changing the default.
 
 ### Gross Margin — default
 
 ```text
-Selling price = Cost / (1 - Gross Margin rate)
+Selling price = Cost ÷ (1 - Gross Margin rate)
 ```
 
-Gross Margin measures profit as a percentage of the selling price.
+Gross Margin measures profit as a percentage of selling price.
 
 ### Markup — alternative
 
 ```text
-Selling price = Cost * (1 + Markup rate)
+Selling price = Cost × (1 + Markup rate)
 ```
 
-Markup measures profit as a percentage of cost. The application labels and
-stores the selected method because the same percentage does not produce the
-same selling price.
+Markup measures profit as a percentage of cost. A 25% Gross Margin and a 25%
+Markup do not produce the same selling price, so the selected method is labeled
+and persisted.
 
-### Incoterm cost inclusion
+Estimated DDP results retain an explicit warning because destination-country
+tariff, tax, customs, and final-delivery assumptions require verification.
 
-| Term | Included cost categories |
-|---|---|
-| EXW | product + packaging + platform/bank fee |
-| FOB | EXW + domestic transportation + export handling |
-| CIF | FOB + international freight + insurance |
-| DDP | CIF + tariff and tax |
+## Architecture
 
-Product and packaging values are unit costs. Other cost fields are entered for
-the full quotation. Money uses `Decimal` and commercial `ROUND_HALF_UP` rounding
-to two decimal places.
+```mermaid
+flowchart LR
+    U["Export salesperson"] --> P["Streamlit pages"]
+    P --> W["Workflow services"]
+    W --> R["Parameterized repositories"]
+    R --> DB[("SQLite")]
+    W --> Q["Quotation engine"]
+    W --> I["Local inquiry rules"]
+    I --> O["Optional enhanced analysis"]
+    W --> X["Excel import/export"]
+```
 
-## 9. Installation Instructions
+- `pages/` owns presentation and user interaction.
+- `services/` owns inquiry, customer-quality, matching, quotation, follow-up,
+  analytics, and workflow rules.
+- `database/` owns initialization, forward migrations, repositories, and
+  fictional demo data.
+- `locales/` contains stable English and Simplified Chinese translation keys.
+- `components/` contains the approved visual system and workflow context.
+
+## Database relationships
+
+```mermaid
+erDiagram
+    CUSTOMERS ||--o{ INQUIRIES : receives
+    PRODUCTS ||--o{ INQUIRIES : matched_to
+    CUSTOMERS ||--o{ QUOTATIONS : receives
+    INQUIRIES ||--o{ QUOTATIONS : produces
+    PRODUCTS ||--o{ QUOTATIONS : quoted_as
+    CUSTOMERS ||--o{ FOLLOW_UPS : has
+    INQUIRIES ||--o{ FOLLOW_UPS : references
+    QUOTATIONS ||--o{ FOLLOW_UPS : triggers
+    CUSTOMERS ||--o{ ACTIVITIES : timeline
+    INQUIRIES ||--o{ ACTIVITIES : timeline
+    QUOTATIONS ||--o{ ACTIVITIES : timeline
+```
+
+Core persisted links:
+
+- `inquiries.customer_id`
+- `inquiries.matched_product_id`
+- `quotations.customer_id`
+- `quotations.inquiry_id`
+- `quotations.product_id`
+- `follow_ups.customer_id`
+- `follow_ups.inquiry_id`
+- `follow_ups.quotation_id`
+- optional `activities.inquiry_id` and `activities.quotation_id`
+
+Migrations are forward-only and idempotent. They preserve existing records,
+avoid duplicate columns/indexes, and are tested with SQLite integrity and
+foreign-key checks.
+
+## Fictional demo data
+
+All bundled companies, people, domains, phone numbers, products, inquiries,
+costs, quotations, follow-ups, and business outcomes are fictional.
+
+The clean demo contains:
+
+- 20 customers
+- 10 inquiries
+- 8 quotations
+- 10 follow-ups
+- 6 products
+
+**Ensure demo data** adds missing bundled records. **Reset fictional demo data**
+replaces only bundled demo records and preserves user-created records. Browser
+QA data is created in temporary databases and is not part of the seed.
+
+## Installation
+
+Python 3.12 is recommended.
 
 ```bash
 git clone <your-repository-url>
-cd your-project-folder
+cd <your-project-folder>
 
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 cp .env.example .env
-chmod 600 .env
 python -m database.init_db
 ```
 
@@ -222,9 +218,9 @@ Windows activation:
 .venv\Scripts\activate
 ```
 
-`OPENAI_API_KEY` is optional. Leave it empty to use the rule analyzer.
+`OPENAI_API_KEY` is optional. Leave it empty to use local inquiry rules.
 
-## 10. How to Run
+## Run
 
 ```bash
 source .venv/bin/activate
@@ -233,126 +229,127 @@ streamlit run app.py
 
 Open [http://localhost:8501](http://localhost:8501).
 
-Run tests:
+To use a separate database:
+
+```bash
+DATABASE_PATH=data/another-workspace.db streamlit run app.py
+```
+
+A new database initializes automatically and receives fictional demo data on
+its first application run.
+
+## Test
 
 ```bash
 python -m pytest
 ```
 
-Optional coverage report:
+Optional coverage:
 
 ```bash
 python -m pytest --cov=services --cov=database --cov-report=term-missing
 ```
 
-## 11. Example Use Cases
+Tests cover pricing formulas, inquiry analysis, repository safety, migrations,
+workflow relationships, translation keys, demo reset behavior, release files,
+and application smoke rendering.
 
-1. **Qualify a new lead:** add a fictional buyer, inspect its five scoring
-   dimensions, then schedule the next follow-up.
-2. **Analyze an RFQ:** paste an English gift-box or notebook inquiry, identify
-   missing freight and specification inputs, and use the suggested reply.
-3. **Compare pricing conventions:** calculate a 25% Gross Margin quote and a
-   25% Markup quote to see the commercial difference.
-4. **Build an Incoterm comparison:** review EXW, FOB, CIF, and DDP cost inclusion
-   before selecting the primary quotation term.
-5. **Review the pipeline:** use the dashboard to see lead quality, country
-   concentration, funnel stages, expected sales, and due follow-ups.
+## Deployment preparation
 
-## 12. Screenshots
+### GitHub Actions
 
-### Analyze Inquiry — Phase 2 English
+`.github/workflows/tests.yml` installs `requirements.txt` with Python 3.12 and
+runs the complete pytest suite on pushes and pull requests.
 
-![English inquiry brief](assets/screenshots/phase2-inquiry-en.png)
+### Streamlit Community Cloud
 
-### 分析询盘 — Phase 2 中文
+The repository includes the root `requirements.txt` and
+`.streamlit/config.toml` expected by Streamlit Community Cloud.
 
-![中文询盘简报](assets/screenshots/phase2-inquiry-zh.png)
+1. Select `app.py` as the entrypoint.
+2. Select Python 3.12 in Advanced settings.
+3. Paste the values from `.streamlit/secrets.toml.example` into the Secrets
+   field.
+4. Leave `OPENAI_API_KEY` empty if enhanced analysis is not required.
 
-### 中文风险与建议追问
+References:
+[Streamlit deployment](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy),
+[dependencies](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies),
+and [secrets](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management).
 
-![中文风险与建议追问](assets/screenshots/phase2-inquiry-zh-results.png)
+SQLite on ephemeral cloud storage is suitable for a demonstration, not for
+durable multi-user production data. Use a managed database and authentication
+before a real public deployment.
 
-### Mobile layout
+### Colab demo
 
-![Responsive mobile Analyze Inquiry workspace](assets/screenshots/phase2-inquiry-mobile.png)
+`output/jupyter-notebook/colab-demo.ipynb` is a clean tutorial notebook that
+demonstrates inquiry structure, Gross Margin versus Markup, currency
+conversion, and workflow relationships with fictional data. It intentionally
+does not invent a GitHub URL; add the real repository URL after publishing.
 
-The screenshots use only fictional portfolio data. Additional deployment
-screenshots can be added under `assets/screenshots/`.
+## Limitations
 
-## 13. Privacy and Data Disclaimer
+- This is a portfolio-grade single-workspace application, not a multi-tenant
+  production system.
+- SQLite has no built-in user authentication and is plaintext at rest.
+- Streamlit Community Cloud storage may be ephemeral.
+- DDP is an estimate until destination-country tariff, tax, customs, and
+  final-delivery inputs are verified.
+- Product matching is explainable keyword matching, not a product feasibility
+  guarantee.
+- Local inquiry rules are deterministic and do not replace salesperson review.
+- External analysis, when enabled, sends inquiry text to the configured
+  provider; confidential data requires authorization and an appropriate data
+  policy.
+- ERP, order execution, customs-data feeds, automated email/calendar actions,
+  and advanced predictive models are intentionally out of scope.
 
-- All bundled names, companies, domains, phone numbers, products, transactions,
-  prices, and costs are fabricated for demonstration.
-- `.env` and local SQLite database files are ignored by Git.
-- API keys are read only from environment variables.
-- The local server binds to `127.0.0.1`; add authentication and authorization
-  before any LAN, cloud, or public deployment.
-- The local data directory and SQLite file are created with restrictive
-  permissions where supported. SQLite remains plaintext storage.
-- Spreadsheet text is neutralized when it begins with an Excel formula prefix.
-- If OpenAI mode is enabled, the inquiry text is sent to the configured external
-  API provider. Do not submit confidential customer or company information
-  without authorization and an appropriate data-processing policy.
-- This application is an educational portfolio system, not legal, customs,
-  tax, accounting, or binding commercial advice.
-
-## 14. Current Scope Boundary
-
-This release focuses on the professional inquiry-to-quote workflow. ERP/order
-execution, customs-data integrations, automatic email/calendar actions,
-advanced predictive scoring, and other expansion modules are intentionally out
-of scope.
-
-## 15. Resume Bullet Points
-
-- Built a multipage B2B export-sales workspace with Python,
-  Streamlit, SQLite, Pandas, and Plotly, integrating customer management,
-  explainable lead scoring, pipeline analytics, and follow-up workflows.
-- Developed a tested Incoterm quotation engine supporting EXW, FOB, CIF, and DDP
-  pricing, CNY-to-USD conversion, Gross Margin versus Markup logic, auditable
-  calculation evidence, and Excel quotation generation.
-- Implemented a resilient RFQ analysis pipeline with structured validation,
-  deterministic rule-based processing, product matching, and privacy-safe
-  fictional demo data across six relational tables.
-
-## Project Structure
+## Project structure
 
 ```text
 .
 ├── app.py
 ├── pages/
-│   ├── dashboard.py
-│   ├── customers.py
 │   ├── inquiry_analyzer.py
+│   ├── customers.py
 │   ├── quotation_calculator.py
 │   ├── follow_up_tracker.py
 │   ├── products.py
-│   └── settings.py
-├── components/
-│   ├── theme.py
-│   └── workflow.py
-├── locales/
-│   ├── en_US.py
-│   └── zh_CN.py
-├── services/
 │   ├── dashboard.py
-│   ├── scoring.py
+│   └── settings.py
+├── services/
 │   ├── inquiry_analyzer.py
-│   ├── quotation.py
-│   ├── followup.py
+│   ├── inquiry_brief.py
+│   ├── customer_intelligence.py
 │   ├── product_match.py
-│   └── excel_service.py
+│   ├── quotation.py
+│   ├── workflow.py
+│   ├── followup.py
+│   └── dashboard.py
 ├── database/
 │   ├── connection.py
 │   ├── init_db.py
+│   ├── migrations.py
 │   ├── repository.py
 │   └── seed_data.py
-├── utils/
+├── components/
+├── locales/
 ├── tests/
-├── data/
-├── assets/screenshots/
-├── gan-harness/
+├── docs/screenshots/
+├── output/jupyter-notebook/
+├── .github/workflows/tests.yml
+├── .streamlit/
 ├── requirements.txt
-├── .env.example
 └── README.md
 ```
+
+## Resume description
+
+- Built a bilingual Streamlit and SQLite export-sales workspace that persists
+  the complete Inquiry → Quotation → Follow-up relationship and customer
+  timeline.
+- Implemented a tested quotation engine for EXW, FOB, CIF, DDP, Gross Margin,
+  Markup, per-quotation exchange rates, and Excel output.
+- Designed decision-focused customer quality, follow-up queue, product
+  reference, and sales analytics modules using Python, SQL, Pandas, and Plotly.

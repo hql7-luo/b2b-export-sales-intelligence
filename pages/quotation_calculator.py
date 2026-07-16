@@ -487,8 +487,7 @@ with calculator_tab:
                     },
                 )
                 chosen = result["terms"][metadata["selected_term"]]
-                if metadata["selected_term"] == "DDP":
-                    st.warning(t("quotation.ddp.warning"))
+                st.warning(t("quotation.ddp.warning"))
                 summary_columns = st.columns(4)
                 summary_columns[0].metric(
                     t("quotation.summary.term"),
