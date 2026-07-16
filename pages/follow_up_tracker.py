@@ -1,16 +1,21 @@
-"""Follow-up queue, communication history, and stage advice."""
+"""Database-backed follow-up queue and quotation-linked communication records."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 import pandas as pd
 import streamlit as st
 
 from components.theme import page_header
-from components.workflow import workflow_rail
-from database.repository import create_follow_up, get_customer, list_customers, list_follow_ups
-from services.followup import follow_up_advice, follow_up_priority, generate_follow_up_message
+from components.workflow import update_workflow_context, workflow_rail
+from database.repository import list_customers, list_follow_ups, list_quotations
+from services.followup import (
+    follow_up_advice,
+    follow_up_priority,
+    generate_follow_up_message,
+)
+from services.workflow import build_follow_up_context, save_follow_up_for_quotation
 from utils.i18n import is_chinese, localize_error, option_label, t, tr
 
 
@@ -29,7 +34,38 @@ FOLLOW_UP_ADVICE_ZH = {
 
 def _display_advice(stage: str | None) -> str:
     english = follow_up_advice(stage or "")
-    return FOLLOW_UP_ADVICE_ZH.get(stage or "", "确认客户当前需求，并约定一个明确的下一步行动。") if is_chinese() else english
+    if is_chinese():
+        return FOLLOW_UP_ADVICE_ZH.get(
+            stage or "",
+            "确认客户当前需求，并约定一个明确的下一步行动。",
+        )
+    return english
+
+
+def _localized_selectbox(
+    label: str,
+    values: list[str],
+    *,
+    state_key: str,
+    default: str,
+) -> str:
+    labels = {value: option_label(value) for value in values}
+    existing_label = st.session_state.get(state_key)
+    current = next(
+        (
+            value
+            for value, localized in labels.items()
+            if localized == existing_label
+        ),
+        st.session_state.get(f"{state_key}_value", default),
+    )
+    st.session_state[state_key] = labels[current]
+    selected_label = st.selectbox(label, list(labels.values()), key=state_key)
+    selected = next(
+        value for value, localized in labels.items() if localized == selected_label
+    )
+    st.session_state[f"{state_key}_value"] = selected
+    return selected
 
 
 page_header(
@@ -42,7 +78,13 @@ workflow_rail("follow_up")
 customers = list_customers()
 today = date.today()
 
-queue_tab, record_tab, history_tab = st.tabs([tr("Priority queue", "优先队列"), tr("Record follow-up", "记录跟进"), tr("History", "沟通历史")])
+queue_tab, record_tab, history_tab = st.tabs(
+    [
+        t("followup.tab.queue"),
+        t("followup.tab.record"),
+        t("followup.tab.history"),
+    ]
+)
 
 with queue_tab:
     queue = []
@@ -52,21 +94,36 @@ with queue_tab:
         due = customer.get("next_follow_up_date")
         queue.append(
             {
-                "priority_score": follow_up_priority(customer.get("effective_grade", "D"), due, today),
-                "status": tr("OVERDUE", "已逾期") if due and str(due) < today.isoformat() else tr("DUE / UNSCHEDULED", "待跟进 / 未安排"),
+                "priority_score": follow_up_priority(
+                    customer.get("effective_grade", "D"),
+                    due,
+                    today,
+                ),
+                "status": (
+                    t("followup.queue.overdue")
+                    if due and str(due) < today.isoformat()
+                    else t("followup.queue.due")
+                ),
                 "company": customer["company_name"],
                 "grade": customer.get("effective_grade"),
                 "stage": customer.get("current_stage"),
-                "next_follow_up": due or tr("Not scheduled", "未安排"),
-                "recommended_action": _display_advice(customer.get("current_stage")),
+                "next_follow_up": due or t("followup.queue.unscheduled"),
+                "recommended_action": _display_advice(
+                    customer.get("current_stage")
+                ),
             }
         )
     queue.sort(key=lambda row: row["priority_score"], reverse=True)
-    overdue_count = sum(row["status"] == tr("OVERDUE", "已逾期") for row in queue)
-    top_cols = st.columns(3)
-    top_cols[0].metric(tr("Active follow-ups", "活跃跟进"), len(queue))
-    top_cols[1].metric(tr("Overdue", "已逾期"), overdue_count)
-    top_cols[2].metric(tr("A-grade active", "活跃 A 级客户"), sum(row["grade"] == "A" for row in queue))
+    overdue_count = sum(
+        row["status"] == t("followup.queue.overdue") for row in queue
+    )
+    top_columns = st.columns(3)
+    top_columns[0].metric(t("followup.queue.active"), len(queue))
+    top_columns[1].metric(t("followup.queue.overdue_metric"), overdue_count)
+    top_columns[2].metric(
+        t("followup.queue.a_grade"),
+        sum(row["grade"] == "A" for row in queue),
+    )
     if queue:
         queue_frame = pd.DataFrame(queue)
         if is_chinese():
@@ -76,62 +133,229 @@ with queue_tab:
             width="stretch",
             hide_index=True,
             column_config={
-                "priority_score": tr("Priority score", "优先级分数"),
-                "status": tr("Status", "状态"),
-                "company": tr("Company", "公司"),
-                "grade": tr("Grade", "等级"),
-                "stage": tr("Stage", "阶段"),
-                "next_follow_up": tr("Next follow-up", "下次跟进"),
-                "recommended_action": tr("Recommended action", "建议行动"),
+                "priority_score": t("followup.queue.priority_score"),
+                "status": t("followup.queue.status"),
+                "company": t("followup.queue.company"),
+                "grade": t("followup.queue.grade"),
+                "stage": t("followup.queue.stage"),
+                "next_follow_up": t("followup.queue.next"),
+                "recommended_action": t("followup.queue.action"),
             },
         )
     else:
-        st.info(tr("No active leads require follow-up.", "当前没有需要跟进的活跃客户。"))
+        st.info(t("followup.queue.empty"))
 
 with record_tab:
-    if not customers:
-        st.info(tr("Add a customer before recording communication.", "请先添加客户，再记录沟通。"))
-    else:
-        labels = {row["id"]: f"{row['company_name']} · {row.get('current_stage')}" for row in customers}
-        selected_id = st.selectbox(tr("Customer", "客户"), list(labels), format_func=labels.get)
-        customer = get_customer(selected_id)
-        st.markdown(f"**{tr('Recommended action', '建议行动')}：** {_display_advice(customer.get('current_stage'))}")
-        with st.form("follow_up_form", clear_on_submit=True):
-            form_cols = st.columns(3)
-            follow_date = form_cols[0].date_input(tr("Contact Date", "联系日期"), value=today)
-            channel = form_cols[1].selectbox(tr("Communication Type", "沟通方式"), ["Email", "WhatsApp / Chat", "Phone", "Video Call", "Meeting"], format_func=option_label)
-            priority = form_cols[2].selectbox(tr("Priority", "优先级"), ["High", "Medium", "Low"], format_func=option_label)
-            content = st.text_area(tr("Communication Content *", "沟通内容 *"), placeholder=tr("What was discussed or sent?", "记录讨论或发送的内容"))
-            outcome = st.text_input(tr("Outcome", "沟通结果"), placeholder=tr("Example: Customer reviewing sample", "例如：客户正在评估样品"))
-            next_date = st.date_input(tr("Next Follow-up Date", "下次跟进日期"), value=today + timedelta(days=3))
-            save = st.form_submit_button(tr("Save follow-up", "保存跟进记录"), type="primary")
-        if save:
-            try:
-                follow_up_id = create_follow_up(
-                    {
-                        "customer_id": selected_id,
-                        "follow_up_date": follow_date.isoformat(),
-                        "communication_type": channel,
-                        "content": content.strip(),
-                        "outcome": outcome.strip(),
-                        "next_follow_up_date": next_date.isoformat(),
-                        "priority": priority,
-                    }
-                )
-                st.success(tr(f"Follow-up #{follow_up_id} saved and the customer's next date was updated.", f"跟进记录 #{follow_up_id} 已保存，并更新了客户的下次跟进日期。"))
-                st.rerun()
-            except ValueError as exc:
-                st.error(localize_error(str(exc)))
+    workflow_context = st.session_state.get("workflow_context", {})
+    selected_quotation_id = workflow_context.get("quotation_id")
+    quotations = [
+        record
+        for record in list_quotations()
+        if record.get("customer_id") and record.get("inquiry_id")
+    ]
+    quotation_by_id = {record["id"]: record for record in quotations}
+    if selected_quotation_id not in quotation_by_id:
+        selected_quotation_id = None
 
-        st.subheader(tr("Suggested English message", "英文跟进消息建议"))
-        st.code(
-            generate_follow_up_message(
-                customer.get("contact_name", ""),
-                customer.get("current_stage", ""),
-                customer.get("product_interest", ""),
-            ),
-            language=None,
+    if selected_quotation_id is None and quotations:
+        st.info(t("followup.source.info"))
+        source_options = {
+            (
+                f"#{record['id']} · {record.get('product_name') or '—'} · "
+                f"{record.get('quotation_date') or '—'}"
+            ): record["id"]
+            for record in quotations
+        }
+        selected_source = st.selectbox(
+            t("followup.source.select"),
+            list(source_options),
+            key="followup_source_quotation",
         )
+        selected_quotation_id = source_options[selected_source]
+        if st.button(
+            t("followup.source.load"),
+            type="primary",
+            key="followup_source_load",
+        ):
+            selected = quotation_by_id[selected_quotation_id]
+            update_workflow_context(
+                stage="follow_up",
+                customer_id=selected["customer_id"],
+                inquiry_id=selected["inquiry_id"],
+                product_id=selected.get("product_id"),
+                quotation_id=selected_quotation_id,
+            )
+            for key in (
+                "followup_content",
+                "followup_outcome",
+                "followup_next_date",
+                "saved_follow_up_id",
+            ):
+                st.session_state.pop(key, None)
+            st.rerun()
+
+    if selected_quotation_id is None:
+        st.warning(t("followup.source.empty"))
+        if st.button(
+            t("followup.action.return_quote"),
+            key="followup_empty_return",
+        ):
+            st.switch_page("pages/quotation_calculator.py")
+    else:
+        try:
+            inherited = build_follow_up_context(
+                selected_quotation_id,
+                today=today,
+            )
+        except ValueError as exc:
+            st.error(localize_error(str(exc)))
+            inherited = None
+
+        if inherited:
+            update_workflow_context(
+                stage="follow_up",
+                customer_id=inherited["customer_id"],
+                customer_name=inherited["customer_name"],
+                inquiry_id=inherited["inquiry_id"],
+                product_id=inherited["product_id"],
+                product=inherited["product_name"],
+                quotation_id=inherited["quotation_id"],
+            )
+            st.subheader(t("followup.context.title"))
+            context_frame = pd.DataFrame(
+                [
+                    {
+                        t("followup.context.field"): t(
+                            f"followup.context.{field}"
+                        ),
+                        t("followup.context.value"): value or "—",
+                    }
+                    for field, value in (
+                        ("customer", inherited["customer_name"]),
+                        ("stage", option_label(inherited["customer_stage"])),
+                        ("inquiry", f"#{inherited['inquiry_id']}"),
+                        ("quotation", f"#{inherited['quotation_id']}"),
+                        ("product", inherited["product_name"]),
+                        (
+                            "recommended_date",
+                            inherited["recommended_follow_up_date"],
+                        ),
+                    )
+                ]
+            )
+            st.dataframe(context_frame, width="stretch", hide_index=True)
+            st.info(
+                t("followup.context.advice")
+                + " "
+                + _display_advice(inherited["customer_stage"])
+            )
+
+            recommended_date = date.fromisoformat(
+                inherited["recommended_follow_up_date"]
+            )
+            with st.form("follow_up_form"):
+                form_columns = st.columns(3)
+                follow_date = form_columns[0].date_input(
+                    t("followup.form.contact_date"),
+                    value=today,
+                    key="followup_contact_date",
+                )
+                with form_columns[1]:
+                    channel = _localized_selectbox(
+                        t("followup.form.channel"),
+                        [
+                            "Email",
+                            "WhatsApp / Chat",
+                            "Phone",
+                            "Video Call",
+                            "Meeting",
+                        ],
+                        state_key="followup_channel",
+                        default="Email",
+                    )
+                with form_columns[2]:
+                    priority = _localized_selectbox(
+                        t("followup.form.priority"),
+                        ["High", "Medium", "Low"],
+                        state_key="followup_priority",
+                        default="High",
+                    )
+                content = st.text_area(
+                    t("followup.form.content"),
+                    placeholder=t("followup.form.content_placeholder"),
+                    key="followup_content",
+                )
+                outcome = st.text_input(
+                    t("followup.form.outcome"),
+                    placeholder=t("followup.form.outcome_placeholder"),
+                    key="followup_outcome",
+                )
+                next_date = st.date_input(
+                    t("followup.form.next_date"),
+                    value=recommended_date,
+                    key="followup_next_date",
+                )
+                save = st.form_submit_button(
+                    t("followup.action.save"),
+                    type="primary",
+                    disabled=bool(st.session_state.get("saved_follow_up_id")),
+                )
+            if save:
+                try:
+                    follow_up_id = save_follow_up_for_quotation(
+                        inherited["quotation_id"],
+                        {
+                            "follow_up_date": follow_date.isoformat(),
+                            "communication_type": channel,
+                            "content": content.strip(),
+                            "outcome": outcome.strip(),
+                            "next_follow_up_date": next_date.isoformat(),
+                            "priority": priority,
+                        },
+                    )
+                    st.session_state["saved_follow_up_id"] = follow_up_id
+                    update_workflow_context(follow_up_id=follow_up_id)
+                    st.success(
+                        t(
+                            "followup.save.success",
+                            follow_up_id=follow_up_id,
+                        )
+                    )
+                except ValueError as exc:
+                    st.error(localize_error(str(exc)))
+
+            customer = next(
+                (
+                    row
+                    for row in customers
+                    if row["id"] == inherited["customer_id"]
+                ),
+                {},
+            )
+            st.subheader(t("followup.message.title"))
+            st.caption(t("followup.message.caption"))
+            st.code(
+                generate_follow_up_message(
+                    customer.get("contact_name", ""),
+                    inherited["customer_stage"],
+                    inherited["product_name"],
+                ),
+                language=None,
+            )
+            if st.session_state.get("saved_follow_up_id"):
+                action_columns = st.columns(2)
+                if action_columns[0].button(
+                    t("followup.action.timeline"),
+                    width="stretch",
+                    key="followup_view_timeline",
+                ):
+                    st.switch_page("pages/customers.py")
+                if action_columns[1].button(
+                    t("followup.action.return_quote"),
+                    width="stretch",
+                    key="followup_return_quote",
+                ):
+                    st.switch_page("pages/quotation_calculator.py")
 
 with history_tab:
     history = list_follow_ups()
@@ -139,22 +363,24 @@ with history_tab:
         frame = pd.DataFrame(history)
         columns = [
             column
-            for column in ("follow_up_date", "company_name", "communication_type", "content", "outcome", "next_follow_up_date", "priority")
+            for column in (
+                "follow_up_date",
+                "company_name",
+                "inquiry_id",
+                "quotation_id",
+                "customer_stage",
+                "communication_type",
+                "content",
+                "outcome",
+                "next_follow_up_date",
+                "priority",
+            )
             if column in frame.columns
         ]
-        st.dataframe(
-            frame[columns],
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "follow_up_date": tr("Follow-up date", "联系日期"),
-                "company_name": tr("Company", "公司"),
-                "communication_type": tr("Communication type", "沟通方式"),
-                "content": tr("Content", "沟通内容"),
-                "outcome": tr("Outcome", "沟通结果"),
-                "next_follow_up_date": tr("Next follow-up", "下次跟进"),
-                "priority": tr("Priority", "优先级"),
-            },
-        )
+        if is_chinese():
+            for column in ("customer_stage", "communication_type", "priority"):
+                if column in frame:
+                    frame[column] = frame[column].map(option_label)
+        st.dataframe(frame[columns], width="stretch", hide_index=True)
     else:
-        st.info(tr("No communication history has been recorded.", "暂无沟通历史。"))
+        st.info(t("followup.history.empty"))

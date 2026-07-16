@@ -13,6 +13,7 @@ from database.repository import (
     create_customers_batch,
     delete_customer,
     get_customer,
+    list_customer_timeline,
     list_customers,
     set_manual_score,
     update_customer,
@@ -161,8 +162,14 @@ page_header(
 )
 
 customers = list_customers()
-pipeline_tab, add_tab, edit_tab, transfer_tab = st.tabs(
-    [tr("Pipeline", "客户管道"), tr("Add customer", "新增客户"), tr("Edit & score", "编辑与评分"), tr("Import / Export", "导入 / 导出")]
+pipeline_tab, add_tab, edit_tab, timeline_tab, transfer_tab = st.tabs(
+    [
+        tr("Pipeline", "客户管道"),
+        tr("Add customer", "新增客户"),
+        tr("Edit & score", "编辑与评分"),
+        t("customer.timeline.tab"),
+        tr("Import / Export", "导入 / 导出"),
+    ]
 )
 
 with pipeline_tab:
@@ -323,6 +330,118 @@ with edit_tab:
             delete_customer(selected_id)
             st.success(tr("Customer deleted.", "客户已删除。"))
             st.rerun()
+
+with timeline_tab:
+    if not customers:
+        st.info(t("customer.timeline.no_customers"))
+    else:
+        timeline_labels = {
+            row["id"]: row["company_name"]
+            for row in customers
+        }
+        context_customer_id = st.session_state.get("workflow_context", {}).get(
+            "customer_id"
+        )
+        if (
+            "timeline_customer_id" not in st.session_state
+            or st.session_state["timeline_customer_id"] not in timeline_labels
+        ):
+            st.session_state["timeline_customer_id"] = (
+                context_customer_id
+                if context_customer_id in timeline_labels
+                else next(iter(timeline_labels))
+            )
+        timeline_customer_id = st.selectbox(
+            t("customer.timeline.select"),
+            list(timeline_labels),
+            format_func=timeline_labels.get,
+            key="timeline_customer_id",
+        )
+        timeline = list_customer_timeline(timeline_customer_id)
+        st.subheader(
+            t(
+                "customer.timeline.title",
+                customer=timeline_labels[timeline_customer_id],
+            )
+        )
+        st.caption(t("customer.timeline.caption"))
+        if timeline:
+            event_keys = {
+                "customer_saved": "customer_saved",
+                "Customer Created": "customer_saved",
+                "inquiry_created": "inquiry_created",
+                "Inquiry Analyzed": "inquiry_created",
+                "product_matched": "product_matched",
+                "quotation_created": "quotation_created",
+                "Quotation Saved": "quotation_created",
+                "follow_up_scheduled": "follow_up_scheduled",
+            }
+            timeline_rows = []
+            for event in timeline:
+                event_key = event_keys.get(event["activity_type"])
+                metadata = event.get("metadata") or {}
+                inquiry_id = event.get("inquiry_id") or metadata.get(
+                    "inquiry_id"
+                )
+                quotation_id = event.get("quotation_id") or metadata.get(
+                    "quotation_id"
+                )
+                if event_key == "customer_saved":
+                    detail = t("customer.timeline.detail.customer_saved")
+                elif event_key == "inquiry_created":
+                    detail = t(
+                        "customer.timeline.detail.inquiry_created",
+                        inquiry_id=inquiry_id or "—",
+                    )
+                elif event_key == "product_matched":
+                    detail = t(
+                        "customer.timeline.detail.product_matched",
+                        product_id=metadata.get("product_id") or "—",
+                    )
+                elif event_key == "quotation_created":
+                    detail = t(
+                        "customer.timeline.detail.quotation_created",
+                        quotation_id=quotation_id or "—",
+                    )
+                elif event_key == "follow_up_scheduled":
+                    detail = t(
+                        "customer.timeline.detail.follow_up_scheduled",
+                        follow_up_id=metadata.get("follow_up_id") or "—",
+                        date=metadata.get("next_follow_up_date")
+                        or metadata.get("follow_up_date")
+                        or "—",
+                    )
+                else:
+                    detail = event["description"]
+                timeline_rows.append(
+                    {
+                        "activity_date": event["activity_date"],
+                        "event": (
+                            t(f"customer.timeline.event.{event_key}")
+                            if event_key
+                            else option_label(event["activity_type"])
+                        ),
+                        "detail": detail,
+                        "inquiry_id": str(inquiry_id) if inquiry_id else "—",
+                        "quotation_id": (
+                            str(quotation_id) if quotation_id else "—"
+                        ),
+                    }
+                )
+            st.dataframe(
+                pd.DataFrame(timeline_rows),
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "activity_date": t("customer.timeline.date"),
+                    "event": t("customer.timeline.event"),
+                    "detail": t("customer.timeline.detail"),
+                    "inquiry_id": t("customer.timeline.inquiry_id"),
+                    "quotation_id": t("customer.timeline.quotation_id"),
+                },
+            )
+        else:
+            st.info(t("customer.timeline.empty"))
 
 with transfer_tab:
     upload = st.file_uploader(tr("Import customers", "导入客户"), type=["csv", "xlsx"], help=tr("Maximum 5 MB. Company Name is required.", "最大 5 MB；公司名称为必填项。"))

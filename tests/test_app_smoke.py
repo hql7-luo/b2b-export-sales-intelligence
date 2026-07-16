@@ -38,6 +38,10 @@ def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
     app.text_area[0].set_value("Please quote 2,000 fictional sample cartons to Rotterdam.").run(timeout=20)
     workflow_context = dict(app.session_state["workflow_context"])
     workflow_context["customer_id"] = 42
+    workflow_context["inquiry_id"] = 84
+    workflow_context["product_id"] = 21
+    workflow_context["quotation_id"] = 126
+    workflow_context["follow_up_id"] = 168
     app.session_state["workflow_context"] = workflow_context
 
     app.segmented_control[0].set_value("zh").run(timeout=20)
@@ -47,6 +51,10 @@ def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
     assert app.segmented_control[0].value == "zh"
     assert app.text_area[0].value == "Please quote 2,000 fictional sample cartons to Rotterdam."
     assert app.session_state["workflow_context"]["customer_id"] == 42
+    assert app.session_state["workflow_context"]["inquiry_id"] == 84
+    assert app.session_state["workflow_context"]["product_id"] == 21
+    assert app.session_state["workflow_context"]["quotation_id"] == 126
+    assert app.session_state["workflow_context"]["follow_up_id"] == 168
 
     app.segmented_control[0].set_value("en").run(timeout=20)
 
@@ -55,6 +63,10 @@ def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
     assert app.segmented_control[0].value == "en"
     assert app.text_area[0].value == "Please quote 2,000 fictional sample cartons to Rotterdam."
     assert app.session_state["workflow_context"]["customer_id"] == 42
+    assert app.session_state["workflow_context"]["inquiry_id"] == 84
+    assert app.session_state["workflow_context"]["product_id"] == 21
+    assert app.session_state["workflow_context"]["quotation_id"] == 126
+    assert app.session_state["workflow_context"]["follow_up_id"] == 168
 
 
 @pytest.mark.smoke

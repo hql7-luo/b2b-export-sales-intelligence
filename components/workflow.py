@@ -17,6 +17,7 @@ WORKFLOW_DEFAULTS = {
     "inquiry_id": None,
     "product_id": None,
     "quotation_id": None,
+    "follow_up_id": None,
     "customer_name": "",
     "country": "",
     "product": "",

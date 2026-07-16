@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE TABLE IF NOT EXISTS inquiries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER,
+    matched_product_id INTEGER,
     inquiry_date TEXT NOT NULL DEFAULT CURRENT_DATE,
     raw_text TEXT,
     product TEXT,
@@ -72,13 +73,18 @@ CREATE TABLE IF NOT EXISTS inquiries (
     analysis_mode TEXT NOT NULL DEFAULT 'rule',
     analysis_json TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+    FOREIGN KEY (matched_product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS quotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER,
+    inquiry_id INTEGER,
+    product_id INTEGER,
     product_name TEXT NOT NULL,
+    specification TEXT,
+    destination TEXT,
     quotation_date TEXT NOT NULL DEFAULT CURRENT_DATE,
     incoterm TEXT NOT NULL,
     quantity INTEGER NOT NULL,
@@ -105,12 +111,17 @@ CREATE TABLE IF NOT EXISTS quotations (
     notes TEXT,
     calculation_json TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+    FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE SET NULL,
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS follow_ups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER NOT NULL,
+    inquiry_id INTEGER,
+    quotation_id INTEGER,
+    customer_stage TEXT,
     follow_up_date TEXT NOT NULL,
     communication_type TEXT,
     content TEXT NOT NULL,
@@ -118,7 +129,9 @@ CREATE TABLE IF NOT EXISTS follow_ups (
     next_follow_up_date TEXT,
     priority TEXT NOT NULL DEFAULT 'Medium',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE SET NULL,
+    FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS products (
@@ -143,12 +156,16 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS activities (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id INTEGER,
+    inquiry_id INTEGER,
+    quotation_id INTEGER,
     activity_type TEXT NOT NULL,
     activity_date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     description TEXT NOT NULL,
     metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
+    FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE SET NULL,
+    FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE SET NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_customers_grade ON customers(lead_grade);
@@ -168,9 +185,13 @@ def initialize_database(db_path: str | Path | None = None) -> Path:
         connection.executescript(SCHEMA_SQL)
         connection.commit()
         row = connection.execute("PRAGMA database_list").fetchone()
-        return Path(row["file"])
+        database_path = Path(row["file"])
     finally:
         connection.close()
+    from database.migrations import apply_migrations
+
+    apply_migrations(database_path)
+    return database_path
 
 
 # Compatibility alias used by small scripts and Streamlit pages.
