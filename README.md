@@ -4,21 +4,12 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.59%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Open Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb)
 
 A bilingual, local-first workspace that helps export sales teams turn an
 English buyer message into a traceable customer record, quotation, and
 follow-up task.
-
-The product is organized around one practical workflow:
-
-**Analyze Inquiry → Prepare Quotation → Follow Up**
-
-It does not attempt to replace an ERP, customs platform, or order-execution
-system. Optional enhanced inquiry analysis is supported, but the complete core
-workflow runs without an API key.
-
-![Business analytics workspace](docs/screenshots/phase4-en-analytics.png)
 
 ## What problem it solves
 
@@ -34,6 +25,43 @@ individual memory. That makes it easy to:
 This application creates one small operating workspace for those decisions.
 SQLite stores the long-term business relationships; Streamlit Session State is
 used only for temporary page-to-page context.
+
+## Core workflow
+
+**Analyze Inquiry → Prepare Quotation → Follow Up**
+
+The application preserves the customer, inquiry, matched product, quotation,
+and follow-up relationships across the workflow. It does not attempt to replace
+an ERP, customs platform, or order-execution system. Optional enhanced inquiry
+analysis is supported, but the complete core workflow runs without an API key.
+
+## Live Demo
+
+[Open the public Streamlit workspace](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)
+or use the Live Demo badge above. The deployed application uses fictional data
+and works in local-rules mode without an API key.
+
+Streamlit Community Cloud may restart the application and reinitialize its
+local SQLite database. Treat the online workspace as a resettable demonstration,
+not durable storage, and do not enter confidential customer information.
+
+## Screenshots
+
+### Public bilingual workspace
+
+![Public Streamlit demo](docs/screenshots/live-demo-public.png)
+
+### End-to-end workflow
+
+![Analyzed inquiry](docs/screenshots/phase5-en-inquiry.png)
+
+![Prepared quotation](docs/screenshots/phase5-zh-quotation.png)
+
+![Customer business timeline](docs/screenshots/phase5-en-timeline.png)
+
+### Decision-focused analytics
+
+![Business analytics workspace](docs/screenshots/phase4-en-analytics.png)
 
 ## How to use it
 
@@ -52,14 +80,6 @@ used only for temporary page-to-page context.
 The language control in the upper-right switches the interface between English
 and Simplified Chinese without clearing the current workflow context or form
 inputs. Customer-facing suggested replies remain professional English.
-
-### End-to-end workflow
-
-![Analyzed inquiry](docs/screenshots/phase5-en-inquiry.png)
-
-![Prepared quotation](docs/screenshots/phase5-zh-quotation.png)
-
-![Customer business timeline](docs/screenshots/phase5-en-timeline.png)
 
 ## Core capabilities
 
@@ -260,7 +280,7 @@ Tests cover pricing formulas, inquiry analysis, repository safety, migrations,
 workflow relationships, translation keys, demo reset behavior, release files,
 and application smoke rendering.
 
-## Deployment preparation
+## Deployment
 
 ### GitHub Actions
 
@@ -272,20 +292,26 @@ runs the complete pytest suite on pushes and pull requests.
 The repository includes the root `requirements.txt` and
 `.streamlit/config.toml` expected by Streamlit Community Cloud.
 
+The public demonstration is available at:
+
+**[b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)**
+
+To deploy another instance:
+
 1. Select `app.py` as the entrypoint.
 2. Select Python 3.11 in Advanced settings.
-3. Paste the values from `.streamlit/secrets.toml.example` into the Secrets
-   field.
-4. Leave `OPENAI_API_KEY` empty if enhanced analysis is not required.
+3. Leave `OPENAI_API_KEY` empty to use the complete local-rules workflow.
+4. Add secrets only when optional enhanced analysis is intentionally enabled.
 
 References:
 [Streamlit deployment](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy),
 [dependencies](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies),
 and [secrets](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management).
 
-SQLite on ephemeral cloud storage is suitable for a demonstration, not for
-durable multi-user production data. Use a managed database and authentication
-before a real public deployment.
+The online Demo uses Streamlit-local SQLite and may reset or reinitialize when
+the container restarts or the app is redeployed. It is suitable for a
+demonstration, not durable multi-user production data. Use a managed database
+and authentication before handling real customer information.
 
 ### Colab demo
 

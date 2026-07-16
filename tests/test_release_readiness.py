@@ -18,6 +18,7 @@ def test_release_files_are_present_and_documented() -> None:
         ROOT / "LICENSE",
         ROOT / ".env.example",
         ROOT / "requirements.txt",
+        ROOT / "docs/screenshots/live-demo-public.png",
     )
     assert all(path.exists() for path in required)
 
@@ -27,6 +28,18 @@ def test_release_files_are_present_and_documented() -> None:
     assert "Limitations" in readme
     assert "docs/screenshots/phase4-en-analytics.png" in readme
     assert "docs/screenshots/phase4-en-customers.png" in readme
+    assert "docs/screenshots/live-demo-public.png" in readme
+    assert (
+        "https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj"
+        ".streamlit.app/"
+    ) in readme
+    assert (
+        "https://colab.research.google.com/github/hql7-luo/"
+        "b2b-export-sales-intelligence/blob/main/notebooks/"
+        "export_sales_intelligence_demo.ipynb"
+    ) in readme
+    assert "<repository" not in readme.lower()
+    assert "<demo" not in readme.lower()
 
 
 def test_github_actions_runs_the_complete_pytest_suite() -> None:
