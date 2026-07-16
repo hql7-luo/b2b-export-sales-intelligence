@@ -1,5 +1,11 @@
 # B2B Export Sales Workspace
 
+[![Tests](https://github.com/hql7-luo/b2b-export-sales-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/hql7-luo/b2b-export-sales-intelligence/actions/workflows/tests.yml)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.59%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb)
+
 A bilingual, local-first workspace that helps export sales teams turn an
 English buyer message into a traceable customer record, quotation, and
 follow-up task.
@@ -197,11 +203,11 @@ QA data is created in temporary databases and is not part of the seed.
 
 ## Installation
 
-Python 3.12 is recommended.
+Python 3.11 or later is recommended.
 
 ```bash
-git clone <your-repository-url>
-cd <your-project-folder>
+git clone https://github.com/hql7-luo/b2b-export-sales-intelligence.git
+cd b2b-export-sales-intelligence
 
 python3 -m venv .venv
 source .venv/bin/activate
@@ -258,7 +264,7 @@ and application smoke rendering.
 
 ### GitHub Actions
 
-`.github/workflows/tests.yml` installs `requirements.txt` with Python 3.12 and
+`.github/workflows/tests.yml` installs `requirements.txt` with Python 3.11 and
 runs the complete pytest suite on pushes and pull requests.
 
 ### Streamlit Community Cloud
@@ -267,7 +273,7 @@ The repository includes the root `requirements.txt` and
 `.streamlit/config.toml` expected by Streamlit Community Cloud.
 
 1. Select `app.py` as the entrypoint.
-2. Select Python 3.12 in Advanced settings.
+2. Select Python 3.11 in Advanced settings.
 3. Paste the values from `.streamlit/secrets.toml.example` into the Secrets
    field.
 4. Leave `OPENAI_API_KEY` empty if enhanced analysis is not required.
@@ -283,10 +289,12 @@ before a real public deployment.
 
 ### Colab demo
 
-`output/jupyter-notebook/colab-demo.ipynb` is a clean tutorial notebook that
-demonstrates inquiry structure, Gross Margin versus Markup, currency
-conversion, and workflow relationships with fictional data. It intentionally
-does not invent a GitHub URL; add the real repository URL after publishing.
+Open the
+[Google Colab demo](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb)
+to run seven code cells directly from the GitHub `main` branch. It demonstrates
+customer scoring, inquiry analysis, Gross Margin versus Markup, quotation
+outputs, and decision-focused business charts using only fictional data. No API
+key is required.
 
 ## Limitations
 
@@ -337,9 +345,10 @@ does not invent a GitHub URL; add the real repository URL after publishing.
 ├── locales/
 ├── tests/
 ├── docs/screenshots/
-├── output/jupyter-notebook/
+├── notebooks/export_sales_intelligence_demo.ipynb
 ├── .github/workflows/tests.yml
 ├── .streamlit/
+├── LICENSE
 ├── requirements.txt
 └── README.md
 ```
