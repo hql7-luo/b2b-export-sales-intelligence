@@ -122,7 +122,13 @@ def _extract_destination(text: str) -> str | None:
         text,
     )
     if port_match:
-        return port_match.group(1).strip(" ,.;")
+        destination = port_match.group(1).strip(" ,.;")
+        return re.sub(
+            r"\s+(?:by|before|within|in)$",
+            "",
+            destination,
+            flags=re.IGNORECASE,
+        )
     for country in COUNTRIES:
         if re.search(rf"\b{re.escape(country)}\b", text, re.IGNORECASE):
             return country
@@ -135,7 +141,8 @@ def _extract_fields(text: str) -> dict[str, str | None]:
     for pattern in (
         r"\bA[3-6]\b",
         r"\b\d+(?:\.\d+)?\s*(?:mm|cm|gsm)\b",
-        r"\b(?:hardcover|softcover|kraft|rigid|recycled|matte|glossy)\b",
+        r"\brecycled(?:\s+paper)?\b",
+        r"\b(?:hardcover|softcover|kraft|rigid|matte|glossy)\b",
     ):
         match = _first_match(pattern, text)
         if match and match.lower() not in {part.lower() for part in specification_parts}:
@@ -160,7 +167,7 @@ def _extract_fields(text: str) -> dict[str, str | None]:
         text,
     )
     packaging = _first_match(
-        r"\b(?:individually packed|individual packaging|retail packaging|polybagged|gift packaging|export cartons?|palletized)\b",
+        r"\b(?:individually packed|individual packaging|retail packaging|paper sleeve|polybagged|gift packaging|export cartons?|palletized)\b",
         text,
     )
     delivery = _first_match(
