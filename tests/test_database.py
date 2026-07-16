@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from database.connection import get_connection
+from database.connection import get_connection, resolve_database_path
 from database.init_db import REQUIRED_TABLES
 from database.repository import (
     create_customer,
@@ -39,6 +39,23 @@ def test_initialization_creates_six_required_tables(db_path):
         "activities",
     }
     assert REQUIRED_TABLES.issubset(table_names)
+
+
+def test_database_path_can_be_overridden_for_clean_demo_runs(
+    tmp_path,
+    monkeypatch,
+):
+    override = tmp_path / "clean-demo.db"
+    monkeypatch.setenv("DATABASE_PATH", str(override))
+
+    assert resolve_database_path() == override
+    connection = get_connection()
+    try:
+        assert connection.execute("PRAGMA database_list").fetchone()["file"] == str(
+            override
+        )
+    finally:
+        connection.close()
 
 
 def test_customer_crud_uses_and_returns_business_fields(db_path):

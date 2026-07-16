@@ -1,4 +1,4 @@
-"""Create the six-table SQLite schema."""
+"""Create the core SQLite business schema and workspace settings."""
 
 from __future__ import annotations
 
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     insurance_cost REAL NOT NULL DEFAULT 0,
     tariff_and_tax REAL NOT NULL DEFAULT 0,
     platform_or_bank_fee REAL NOT NULL DEFAULT 0,
-    exchange_rate REAL NOT NULL DEFAULT 7.2,
+    exchange_rate REAL NOT NULL DEFAULT 1.0,
     pricing_method TEXT NOT NULL DEFAULT 'gross_margin',
     pricing_rate REAL NOT NULL DEFAULT 0,
     total_cost_cny REAL NOT NULL DEFAULT 0,
@@ -166,6 +166,12 @@ CREATE TABLE IF NOT EXISTS activities (
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
     FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE SET NULL,
     FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_customers_grade ON customers(lead_grade);

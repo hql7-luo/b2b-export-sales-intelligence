@@ -16,6 +16,7 @@ from database.repository import (
     get_inquiry,
     get_product,
     get_quotation,
+    update_inquiry_matched_product,
 )
 
 
@@ -114,10 +115,14 @@ def build_quotation_context(
 def save_quotation_for_inquiry(
     inquiry_id: int,
     quotation: Mapping[str, Any],
+    *,
+    product_verified: bool = False,
     db_path: str | Path | None = None,
 ) -> int:
     """Persist a quotation while forcing all core fields from the inquiry."""
     inherited = build_quotation_context(inquiry_id, db_path=db_path)
+    if inherited["product_id"] is None and not product_verified:
+        raise ValueError("unmatched product must be verified before saving")
     record = {
         **dict(quotation),
         "customer_id": inherited["customer_id"],
@@ -131,6 +136,21 @@ def save_quotation_for_inquiry(
         "lead_time": inherited["production_lead_time"],
     }
     return create_quotation(record, db_path=db_path)
+
+
+def set_inquiry_matched_product(
+    inquiry_id: int,
+    product_id: int,
+    db_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Persist a selected product and return refreshed quotation context."""
+    if not update_inquiry_matched_product(
+        inquiry_id,
+        product_id,
+        db_path=db_path,
+    ):
+        raise ValueError("saved inquiry was not found")
+    return build_quotation_context(inquiry_id, db_path=db_path)
 
 
 def build_follow_up_context(
@@ -188,4 +208,5 @@ __all__ = [
     "save_follow_up_for_quotation",
     "save_inquiry_for_customer",
     "save_quotation_for_inquiry",
+    "set_inquiry_matched_product",
 ]

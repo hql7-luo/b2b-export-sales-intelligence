@@ -10,10 +10,20 @@ import streamlit as st
 
 from components.theme import page_header
 from components.workflow import update_workflow_context, workflow_rail
-from database.repository import list_inquiries, list_quotations
+from database.repository import (
+    get_setting,
+    list_inquiries,
+    list_products,
+    list_quotations,
+)
 from services.excel_service import quotation_to_excel
+from services.product_match import recommend_products
 from services.quotation import calculate_quotation
-from services.workflow import build_quotation_context, save_quotation_for_inquiry
+from services.workflow import (
+    build_quotation_context,
+    save_quotation_for_inquiry,
+    set_inquiry_matched_product,
+)
 from utils.constants import INCOTERM_DESCRIPTIONS
 from utils.i18n import localize_error, t, tr
 
@@ -61,7 +71,6 @@ with calculator_tab:
         inquiry
         for inquiry in list_inquiries()
         if inquiry.get("customer_id")
-        and inquiry.get("matched_product_id")
         and inquiry.get("quantity")
     ]
     inquiry_by_id = {row["id"]: row for row in eligible_inquiries}
@@ -82,7 +91,7 @@ with calculator_tab:
             list(source_options),
             key="quotation_source_inquiry",
         )
-        selected_inquiry_id = source_options[selected_source]
+        candidate_inquiry_id = source_options[selected_source]
         if st.button(
             t("quotation.source.load"),
             type="primary",
@@ -90,11 +99,11 @@ with calculator_tab:
         ):
             update_workflow_context(
                 stage="prepare",
-                inquiry_id=selected_inquiry_id,
-                customer_id=inquiry_by_id[selected_inquiry_id]["customer_id"],
-                product_id=inquiry_by_id[selected_inquiry_id][
+                inquiry_id=candidate_inquiry_id,
+                customer_id=inquiry_by_id[candidate_inquiry_id]["customer_id"],
+                product_id=inquiry_by_id[candidate_inquiry_id].get(
                     "matched_product_id"
-                ],
+                ),
             )
             for key in (
                 "quotation_result",
@@ -105,9 +114,15 @@ with calculator_tab:
             st.rerun()
 
     if selected_inquiry_id is None:
-        st.warning(t("quotation.source.empty"))
-        if st.button(t("quotation.action.return_inquiry"), key="quote_empty_return"):
-            st.switch_page("pages/inquiry_analyzer.py")
+        if eligible_inquiries:
+            st.caption(t("quotation.source.pending"))
+        else:
+            st.warning(t("quotation.source.empty"))
+            if st.button(
+                t("quotation.action.return_inquiry"),
+                key="quote_empty_return",
+            ):
+                st.switch_page("pages/inquiry_analyzer.py")
     else:
         try:
             inherited = build_quotation_context(selected_inquiry_id)
@@ -116,6 +131,14 @@ with calculator_tab:
             inherited = None
 
         if inherited:
+            source_inquiry = inquiry_by_id.get(selected_inquiry_id) or next(
+                (
+                    row
+                    for row in eligible_inquiries
+                    if row["id"] == selected_inquiry_id
+                ),
+                {},
+            )
             update_workflow_context(
                 stage="prepare",
                 customer_id=inherited["customer_id"],
@@ -128,6 +151,76 @@ with calculator_tab:
                 specification=inherited["specification"],
                 destination=inherited["destination"],
             )
+            if inherited["product_id"] is None:
+                st.warning(t("quotation.product.unmatched_warning"))
+                match_modes = {
+                    "recommended": t(
+                        "quotation.product.mode.recommended"
+                    ),
+                    "manual": t("quotation.product.mode.manual"),
+                    "unmatched": t("quotation.product.mode.unmatched"),
+                }
+                match_mode = st.radio(
+                    t("quotation.product.mode"),
+                    list(match_modes),
+                    format_func=match_modes.get,
+                    key="quotation_product_match_mode",
+                    horizontal=True,
+                )
+                products = list_products()
+                selectable_products = products
+                if match_mode == "recommended":
+                    recommendations = recommend_products(
+                        " ".join(
+                            (
+                                source_inquiry.get("raw_text") or "",
+                                source_inquiry.get("product") or "",
+                                source_inquiry.get("specification") or "",
+                            )
+                        ),
+                        products,
+                        limit=5,
+                    )
+                    selectable_products = recommendations
+                    if not recommendations:
+                        st.info(t("quotation.product.no_recommendation"))
+                if match_mode in {"recommended", "manual"} and selectable_products:
+                    product_labels = {
+                        product["id"]: (
+                            f"{product['product_name']} · "
+                            f"{product.get('specification') or '—'}"
+                        )
+                        for product in selectable_products
+                    }
+                    selected_product_id = st.selectbox(
+                        t("quotation.product.select"),
+                        list(product_labels),
+                        format_func=product_labels.get,
+                        key="quotation_product_selection",
+                    )
+                    if st.button(
+                        t("quotation.product.apply"),
+                        type="primary",
+                        key="quotation_product_apply",
+                    ):
+                        set_inquiry_matched_product(
+                            inherited["inquiry_id"],
+                            selected_product_id,
+                        )
+                        for key in (
+                            "quotation_result",
+                            "quotation_metadata",
+                            "saved_quotation_id",
+                        ):
+                            st.session_state.pop(key, None)
+                        update_workflow_context(
+                            product_id=selected_product_id
+                        )
+                        st.success(t("quotation.product.applied"))
+                        st.rerun()
+                if match_mode == "unmatched":
+                    st.info(t("quotation.product.draft_info"))
+
             st.subheader(t("quotation.context.title"))
             st.caption(t("quotation.context.caption"))
             context_frame = pd.DataFrame(
@@ -255,7 +348,7 @@ with calculator_tab:
                     index=2,
                     key="quote_incoterm",
                 )
-                detail_columns = st.columns(2)
+                detail_columns = st.columns(3)
                 payment_terms = detail_columns[0].text_input(
                     t("quotation.terms.payment"),
                     value=t("quotation.terms.payment_default"),
@@ -265,6 +358,17 @@ with calculator_tab:
                     t("quotation.terms.valid_until"),
                     value=date.today() + timedelta(days=30),
                     key="quote_valid_until",
+                )
+                exchange_rate = detail_columns[2].number_input(
+                    t("quotation.exchange.input"),
+                    min_value=0.01,
+                    value=float(
+                        get_setting("default_exchange_rate") or "7.20"
+                    ),
+                    step=0.01,
+                    format="%.4f",
+                    key="quote_exchange_rate",
+                    help=t("quotation.exchange.help"),
                 )
                 calculate = st.form_submit_button(
                     t("quotation.action.calculate"),
@@ -283,7 +387,7 @@ with calculator_tab:
                         insurance_cny=insurance,
                         tariff_tax_cny=0,
                         platform_bank_fee_cny=0,
-                        exchange_rate_cny_per_usd=7.2,
+                        exchange_rate_cny_per_usd=exchange_rate,
                         pricing_rate=Decimal(str(rate_percent))
                         / Decimal("100"),
                         pricing_method=pricing_method,
@@ -300,6 +404,7 @@ with calculator_tab:
                         "lead_time": inherited.get("production_lead_time"),
                         "payment_terms": payment_terms,
                         "notes": "",
+                        "product_verified": inherited["product_id"] is not None,
                         "costs": {
                             "unit_product_cost": product_cost,
                             "packaging_cost": packaging_cost,
@@ -382,6 +487,8 @@ with calculator_tab:
                     },
                 )
                 chosen = result["terms"][metadata["selected_term"]]
+                if metadata["selected_term"] == "DDP":
+                    st.warning(t("quotation.ddp.warning"))
                 summary_columns = st.columns(4)
                 summary_columns[0].metric(
                     t("quotation.summary.term"),
@@ -400,12 +507,21 @@ with calculator_tab:
                     f"${chosen['gross_profit_usd']:,.2f}",
                 )
 
+                product_verified = inherited["product_id"] is not None
+                if inherited["product_id"] is None:
+                    st.warning(t("quotation.product.save_warning"))
+                    product_verified = st.checkbox(
+                        t("quotation.product.verify"),
+                        key="quotation_unmatched_product_verified",
+                    )
+
                 save_column, export_column = st.columns(2)
                 if save_column.button(
                     t("quotation.action.save"),
                     type="primary",
                     width="stretch",
-                    disabled=bool(st.session_state.get("saved_quotation_id")),
+                    disabled=bool(st.session_state.get("saved_quotation_id"))
+                    or not product_verified,
                     key="save_quotation_record",
                 ):
                     record = {
@@ -431,6 +547,7 @@ with calculator_tab:
                         quotation_id = save_quotation_for_inquiry(
                             inherited["inquiry_id"],
                             record,
+                            product_verified=product_verified,
                         )
                         st.session_state["saved_quotation_id"] = quotation_id
                         update_workflow_context(

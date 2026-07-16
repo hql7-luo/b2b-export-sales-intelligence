@@ -64,6 +64,12 @@ def _demo_customer_payload(index: int, customer: tuple[Any, ...]) -> dict[str, A
         )
     elif index <= 7:
         payload["current_stage"] = "Replied"
+    elif index == 8:
+        payload.update(
+            import_frequency="Quarterly",
+            estimated_purchase_volume=18000,
+            current_stage="Order Confirmed",
+        )
     elif index <= 13:
         payload.update(
             import_frequency="Annual",
@@ -113,8 +119,8 @@ DEMO_QUOTATION_INPUTS = [
 ]
 
 DEMO_FOLLOW_UPS = [
-    (1, "2026-07-14", "Email", "Confirmed paper weight and foil artwork format.", "Specification confirmed", "2026-07-18", "High"),
-    (2, "2026-07-13", "Video Call", "Reviewed insert structure and holiday delivery window.", "Quotation requested", "2026-07-17", "High"),
+    (1, "2026-07-12", "Email", "Confirmed paper weight and foil artwork format.", "Specification confirmed", "2026-07-14", "High"),
+    (2, "2026-07-12", "Video Call", "Reviewed insert structure and holiday delivery window.", "Quotation requested", "2026-07-15", "High"),
     (3, "2026-07-12", "Email", "Asked whether envelopes require printed liners.", "Awaiting clarification", "2026-07-19", "Medium"),
     (4, "2026-07-11", "Chat", "Shared flat-pack structural sample photos.", "Sample requested", "2026-07-16", "High"),
     (5, "2026-07-10", "Email", "Sent calendar holiday localization checklist.", "Customer reviewing", "2026-07-20", "Medium"),
@@ -125,23 +131,100 @@ DEMO_FOLLOW_UPS = [
     (10, "2026-07-15", "Video Call", "Reviewed DDP cost assumptions and delivery address.", "Commercial review", "2026-07-18", "High"),
 ]
 
+DEMO_INQUIRY_PRODUCT_NAMES = (
+    "Aurora Custom Notebook",
+    "Starlight Festival Gift Box",
+    "Meadow Greeting Card Set",
+    "Orbit Creative Packaging Box",
+    "Harbor Desk Calendar",
+    "Comet Die-cut Sticker Pack",
+    "Starlight Festival Gift Box",
+    "Aurora Custom Notebook",
+    "Meadow Greeting Card Set",
+    "Starlight Festival Gift Box",
+)
 
-def _insert_products(connection: Any) -> None:
-    connection.executemany(
-        """INSERT OR IGNORE INTO products (
-            product_name, category, application, material, specification, moq,
-            sample_lead_time, production_lead_time, packaging, unit_cost,
-            common_customer_questions, selling_points, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        DEMO_PRODUCTS,
+
+def _insert_products(connection: Any) -> dict[str, int]:
+    product_ids: dict[str, int] = {}
+    columns = (
+        "product_name",
+        "category",
+        "application",
+        "material",
+        "specification",
+        "moq",
+        "sample_lead_time",
+        "production_lead_time",
+        "packaging",
+        "unit_cost",
+        "common_customer_questions",
+        "selling_points",
+        "notes",
+    )
+    for product in DEMO_PRODUCTS:
+        existing = connection.execute(
+            "SELECT id FROM products WHERE product_name = ?",
+            (product[0],),
+        ).fetchone()
+        if existing:
+            assignments = ", ".join(f"{column} = ?" for column in columns[1:])
+            connection.execute(
+                f"UPDATE products SET {assignments}, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (*product[1:], existing["id"]),
+            )
+            product_id = int(existing["id"])
+        else:
+            cursor = connection.execute(
+                f"INSERT INTO products ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                product,
+            )
+            product_id = int(cursor.lastrowid)
+        product_ids[product[0]] = product_id
+    return product_ids
+
+
+def _replace_activity(
+    connection: Any,
+    *,
+    customer_id: int,
+    inquiry_id: int | None,
+    quotation_id: int | None,
+    activity_type: str,
+    description: str,
+    metadata: dict[str, Any],
+) -> None:
+    connection.execute(
+        "DELETE FROM activities WHERE customer_id = ? "
+        "AND inquiry_id IS ? AND quotation_id IS ? AND activity_type = ?",
+        (customer_id, inquiry_id, quotation_id, activity_type),
+    )
+    connection.execute(
+        "INSERT INTO activities "
+        "(customer_id, inquiry_id, quotation_id, activity_type, "
+        "description, metadata) VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            customer_id,
+            inquiry_id,
+            quotation_id,
+            activity_type,
+            description,
+            json.dumps(metadata),
+        ),
     )
 
 
-def _insert_inquiries(connection: Any) -> None:
-    if connection.execute("SELECT COUNT(*) AS count FROM inquiries").fetchone()["count"]:
-        return
-    rows = []
-    for inquiry in DEMO_INQUIRIES:
+def _insert_inquiries(
+    connection: Any,
+    customer_ids: dict[str, int],
+    product_ids: dict[str, int],
+) -> dict[int, int]:
+    inquiry_ids: dict[int, int] = {}
+    for customer_number, inquiry in enumerate(DEMO_INQUIRIES, start=1):
+        customer_id = customer_ids[DEMO_CUSTOMERS[customer_number - 1][0]]
+        product_id = product_ids[DEMO_INQUIRY_PRODUCT_NAMES[customer_number - 1]]
         extracted = {
             "product": inquiry[2],
             "specification": inquiry[3],
@@ -167,36 +250,91 @@ def _insert_inquiries(connection: Any) -> None:
             "completeness_score": score,
             "suggested_reply": "Thank you for your inquiry. We will review the details and confirm the remaining points.",
         }
-        rows.append(
-            inquiry
-            + (
-                json.dumps(confirmed),
-                json.dumps(missing),
-                score,
-                analysis["suggested_reply"],
-                json.dumps(analysis),
-            )
+        values = (
+            customer_id,
+            product_id,
+            inquiry[1],
+            *inquiry[2:],
+            json.dumps(confirmed),
+            json.dumps(missing),
+            json.dumps([]),
+            json.dumps(analysis["next_questions"]),
+            score,
+            analysis["suggested_reply"],
+            "rule",
+            json.dumps(analysis),
         )
-    connection.executemany(
-        """INSERT INTO inquiries (
-            customer_id, raw_text, product, specification, quantity, application,
-            customization_requirement, packaging_requirement, destination,
-            required_delivery_time, target_price, sample_requirement,
-            payment_requirement, confirmed_info, missing_info, completeness_score,
-            suggested_reply, analysis_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        rows,
-    )
+        existing = connection.execute(
+            "SELECT id FROM inquiries WHERE raw_text = ?",
+            (inquiry[1],),
+        ).fetchone()
+        columns = (
+            "customer_id",
+            "matched_product_id",
+            "raw_text",
+            "product",
+            "specification",
+            "quantity",
+            "application",
+            "customization_requirement",
+            "packaging_requirement",
+            "destination",
+            "required_delivery_time",
+            "target_price",
+            "sample_requirement",
+            "payment_requirement",
+            "confirmed_info",
+            "missing_info",
+            "risks",
+            "next_questions",
+            "completeness_score",
+            "suggested_reply",
+            "analysis_mode",
+            "analysis_json",
+        )
+        if existing:
+            assignments = ", ".join(f"{column} = ?" for column in columns)
+            connection.execute(
+                f"UPDATE inquiries SET {assignments} WHERE id = ?",
+                (*values, existing["id"]),
+            )
+            inquiry_id = int(existing["id"])
+        else:
+            cursor = connection.execute(
+                f"INSERT INTO inquiries ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                values,
+            )
+            inquiry_id = int(cursor.lastrowid)
+        inquiry_ids[customer_number] = inquiry_id
+        _replace_activity(
+            connection,
+            customer_id=customer_id,
+            inquiry_id=inquiry_id,
+            quotation_id=None,
+            activity_type="inquiry_created",
+            description="Fictional demo inquiry created",
+            metadata={"inquiry_id": inquiry_id},
+        )
+        _replace_activity(
+            connection,
+            customer_id=customer_id,
+            inquiry_id=inquiry_id,
+            quotation_id=None,
+            activity_type="product_matched",
+            description="Fictional demo product matched",
+            metadata={"product_id": product_id},
+        )
+    return inquiry_ids
 
 
-def _insert_quotations(connection: Any) -> None:
-    customer_ids = {
-        row["company_name"]: row["id"]
-        for row in connection.execute(
-            "SELECT id, company_name FROM customers"
-        ).fetchall()
-    }
-    rows = []
+def _insert_quotations(
+    connection: Any,
+    customer_ids: dict[str, int],
+    product_ids: dict[str, int],
+    inquiry_ids: dict[int, int],
+) -> dict[int, int]:
+    quotation_ids: dict[int, int] = {}
     for scenario in DEMO_QUOTATION_INPUTS:
         (
             customer_number,
@@ -220,12 +358,9 @@ def _insert_quotations(connection: Any) -> None:
             payment_terms,
         ) = scenario
         customer_id = customer_ids[DEMO_CUSTOMERS[customer_number - 1][0]]
-        # Refresh only the exact bundled scenario, leaving user-created quotes alone.
-        connection.execute(
-            "DELETE FROM quotations WHERE customer_id = ? AND product_name = ? "
-            "AND incoterm = ? AND quantity = ? AND valid_until = ?",
-            (customer_id, product_name, incoterm, quantity, valid_until),
-        )
+        product_id = product_ids[product_name]
+        inquiry_id = inquiry_ids[customer_number]
+        inquiry = DEMO_INQUIRIES[customer_number - 1]
         result = calculate_quotation(
             product_unit_cost_cny=unit_cost,
             packaging_unit_cost_cny=packaging,
@@ -241,57 +376,184 @@ def _insert_quotations(connection: Any) -> None:
             pricing_rate=pricing_rate,
         )
         term = result["terms"][incoterm]
-        rows.append(
-            (
-                customer_id,
-                product_name,
-                incoterm,
-                quantity,
-                unit_cost,
-                packaging,
-                domestic,
-                handling,
-                freight,
-                insurance,
-                tariff_tax,
-                fee,
-                exchange_rate,
-                pricing_method,
-                pricing_rate,
-                float(term["cost_total_cny"]),
-                float(term["unit_usd"]),
-                float(term["total_usd"]),
-                float(term["gross_profit_usd"]),
-                float(term["gross_margin"]),
-                valid_until,
-                moq,
-                lead_time,
-                payment_terms,
-            )
+        values = (
+            customer_id,
+            inquiry_id,
+            product_id,
+            product_name,
+            inquiry[3],
+            inquiry[8],
+            incoterm,
+            quantity,
+            unit_cost,
+            packaging,
+            domestic,
+            handling,
+            freight,
+            insurance,
+            tariff_tax,
+            fee,
+            exchange_rate,
+            pricing_method,
+            pricing_rate,
+            float(term["cost_total_cny"]),
+            float(term["unit_usd"]),
+            float(term["total_usd"]),
+            float(term["gross_profit_usd"]),
+            float(term["gross_margin"]),
+            valid_until,
+            moq,
+            lead_time,
+            payment_terms,
+            json.dumps(result, default=str),
         )
-    connection.executemany(
-        """INSERT INTO quotations (
-            customer_id, product_name, incoterm, quantity, unit_product_cost,
-            packaging_cost, domestic_transportation_cost, export_handling_cost,
-            international_freight, insurance_cost, tariff_and_tax,
-            platform_or_bank_fee, exchange_rate, pricing_method, pricing_rate,
-            total_cost_cny, unit_quote_usd, total_quote_usd, gross_profit_usd,
-            gross_margin, valid_until, moq, lead_time, payment_terms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        rows,
-    )
+        columns = (
+            "customer_id",
+            "inquiry_id",
+            "product_id",
+            "product_name",
+            "specification",
+            "destination",
+            "incoterm",
+            "quantity",
+            "unit_product_cost",
+            "packaging_cost",
+            "domestic_transportation_cost",
+            "export_handling_cost",
+            "international_freight",
+            "insurance_cost",
+            "tariff_and_tax",
+            "platform_or_bank_fee",
+            "exchange_rate",
+            "pricing_method",
+            "pricing_rate",
+            "total_cost_cny",
+            "unit_quote_usd",
+            "total_quote_usd",
+            "gross_profit_usd",
+            "gross_margin",
+            "valid_until",
+            "moq",
+            "lead_time",
+            "payment_terms",
+            "calculation_json",
+        )
+        existing = connection.execute(
+            "SELECT id FROM quotations WHERE customer_id = ? "
+            "AND product_name = ? AND incoterm = ? AND quantity = ? "
+            "AND valid_until = ?",
+            (customer_id, product_name, incoterm, quantity, valid_until),
+        ).fetchone()
+        if existing:
+            assignments = ", ".join(f"{column} = ?" for column in columns)
+            connection.execute(
+                f"UPDATE quotations SET {assignments} WHERE id = ?",
+                (*values, existing["id"]),
+            )
+            quotation_id = int(existing["id"])
+        else:
+            cursor = connection.execute(
+                f"INSERT INTO quotations ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                values,
+            )
+            quotation_id = int(cursor.lastrowid)
+        quotation_ids[customer_number] = quotation_id
+        _replace_activity(
+            connection,
+            customer_id=customer_id,
+            inquiry_id=inquiry_id,
+            quotation_id=quotation_id,
+            activity_type="quotation_created",
+            description=f"Fictional {incoterm} quotation created",
+            metadata={
+                "quotation_id": quotation_id,
+                "product_id": product_id,
+            },
+        )
+    return quotation_ids
 
 
-def _insert_follow_ups(connection: Any) -> None:
-    if connection.execute("SELECT COUNT(*) AS count FROM follow_ups").fetchone()["count"]:
-        return
-    connection.executemany(
-        """INSERT INTO follow_ups (
-            customer_id, follow_up_date, communication_type, content, outcome,
-            next_follow_up_date, priority
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
-        DEMO_FOLLOW_UPS,
-    )
+def _insert_follow_ups(
+    connection: Any,
+    customer_ids: dict[str, int],
+    inquiry_ids: dict[int, int],
+    quotation_ids: dict[int, int],
+) -> None:
+    for follow_up in DEMO_FOLLOW_UPS:
+        (
+            customer_number,
+            follow_up_date,
+            communication_type,
+            content,
+            outcome,
+            next_follow_up_date,
+            priority,
+        ) = follow_up
+        customer_id = customer_ids[DEMO_CUSTOMERS[customer_number - 1][0]]
+        inquiry_id = inquiry_ids[customer_number]
+        quotation_id = quotation_ids.get(customer_number)
+        stage = connection.execute(
+            "SELECT current_stage FROM customers WHERE id = ?",
+            (customer_id,),
+        ).fetchone()["current_stage"]
+        values = (
+            customer_id,
+            inquiry_id,
+            quotation_id,
+            stage,
+            follow_up_date,
+            communication_type,
+            content,
+            outcome,
+            next_follow_up_date,
+            priority,
+        )
+        existing = connection.execute(
+            "SELECT id FROM follow_ups WHERE customer_id = ? "
+            "AND follow_up_date = ? AND content = ?",
+            (customer_id, follow_up_date, content),
+        ).fetchone()
+        columns = (
+            "customer_id",
+            "inquiry_id",
+            "quotation_id",
+            "customer_stage",
+            "follow_up_date",
+            "communication_type",
+            "content",
+            "outcome",
+            "next_follow_up_date",
+            "priority",
+        )
+        if existing:
+            assignments = ", ".join(f"{column} = ?" for column in columns)
+            connection.execute(
+                f"UPDATE follow_ups SET {assignments} WHERE id = ?",
+                (*values, existing["id"]),
+            )
+            follow_up_id = int(existing["id"])
+        else:
+            cursor = connection.execute(
+                f"INSERT INTO follow_ups ({', '.join(columns)}) "
+                f"VALUES ({', '.join('?' for _ in columns)})",
+                values,
+            )
+            follow_up_id = int(cursor.lastrowid)
+        _replace_activity(
+            connection,
+            customer_id=customer_id,
+            inquiry_id=inquiry_id,
+            quotation_id=quotation_id,
+            activity_type="follow_up_scheduled",
+            description=content,
+            metadata={
+                "follow_up_id": follow_up_id,
+                "follow_up_date": follow_up_date,
+                "next_follow_up_date": next_follow_up_date,
+                "outcome": outcome,
+            },
+        )
 
 
 def seed_demo_data(db_path: str | Path | None = None) -> dict[str, int]:
@@ -317,10 +579,26 @@ def seed_demo_data(db_path: str | Path | None = None) -> dict[str, int]:
 
     connection = get_connection(db_path)
     try:
-        _insert_products(connection)
-        _insert_inquiries(connection)
-        _insert_quotations(connection)
-        _insert_follow_ups(connection)
+        customer_ids = {
+            row["company_name"]: int(row["id"])
+            for row in connection.execute(
+                "SELECT id, company_name FROM customers"
+            ).fetchall()
+        }
+        product_ids = _insert_products(connection)
+        inquiry_ids = _insert_inquiries(connection, customer_ids, product_ids)
+        quotation_ids = _insert_quotations(
+            connection,
+            customer_ids,
+            product_ids,
+            inquiry_ids,
+        )
+        _insert_follow_ups(
+            connection,
+            customer_ids,
+            inquiry_ids,
+            quotation_ids,
+        )
         connection.commit()
         tables = ("customers", "inquiries", "quotations", "follow_ups", "products")
         return {
@@ -331,6 +609,54 @@ def seed_demo_data(db_path: str | Path | None = None) -> dict[str, int]:
         }
     finally:
         connection.close()
+
+
+def reset_demo_data(db_path: str | Path | None = None) -> dict[str, int]:
+    """Reset only bundled fictional records while preserving user-owned data."""
+    initialize_database(db_path)
+    connection = get_connection(db_path)
+    try:
+        demo_customer_rows = connection.execute(
+            f"SELECT id FROM customers WHERE company_name IN "
+            f"({', '.join('?' for _ in DEMO_CUSTOMERS)})",
+            tuple(customer[0] for customer in DEMO_CUSTOMERS),
+        ).fetchall()
+        customer_ids = [int(row["id"]) for row in demo_customer_rows]
+        demo_raw_texts = tuple(inquiry[1] for inquiry in DEMO_INQUIRIES)
+        demo_product_names = tuple(product[0] for product in DEMO_PRODUCTS)
+        if customer_ids:
+            placeholders = ", ".join("?" for _ in customer_ids)
+            connection.execute(
+                f"DELETE FROM activities WHERE customer_id IN ({placeholders})",
+                tuple(customer_ids),
+            )
+            connection.execute(
+                f"DELETE FROM follow_ups WHERE customer_id IN ({placeholders})",
+                tuple(customer_ids),
+            )
+            connection.execute(
+                f"DELETE FROM quotations WHERE customer_id IN ({placeholders})",
+                tuple(customer_ids),
+            )
+        connection.execute(
+            f"DELETE FROM inquiries WHERE raw_text IN "
+            f"({', '.join('?' for _ in demo_raw_texts)})",
+            demo_raw_texts,
+        )
+        connection.execute(
+            f"DELETE FROM customers WHERE company_name IN "
+            f"({', '.join('?' for _ in DEMO_CUSTOMERS)})",
+            tuple(customer[0] for customer in DEMO_CUSTOMERS),
+        )
+        connection.execute(
+            f"DELETE FROM products WHERE product_name IN "
+            f"({', '.join('?' for _ in demo_product_names)})",
+            demo_product_names,
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    return seed_demo_data(db_path)
 
 
 if __name__ == "__main__":

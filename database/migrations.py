@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from database.connection import get_connection
 
 
 WORKFLOW_RELATIONSHIP_MIGRATION = "001_workflow_relationships"
+SETTINGS_MIGRATION = "002_workspace_settings"
 
 WORKFLOW_COLUMNS = {
     "inquiries": {
@@ -69,6 +71,31 @@ def _apply_workflow_relationships(connection) -> None:
         )
 
 
+def _default_exchange_rate() -> str:
+    value = str(os.getenv("DEFAULT_EXCHANGE_RATE", "7.20")).strip()
+    try:
+        return value if float(value) > 0 else "7.20"
+    except ValueError:
+        return "7.20"
+
+
+def _apply_workspace_settings(connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+    connection.execute(
+        "INSERT OR IGNORE INTO app_settings (setting_key, setting_value) "
+        "VALUES (?, ?)",
+        ("default_exchange_rate", _default_exchange_rate()),
+    )
+
+
 def apply_migrations(db_path: str | Path | None = None) -> list[str]:
     """Apply missing migrations and return the migration IDs applied now."""
     connection = get_connection(db_path)
@@ -88,19 +115,29 @@ def apply_migrations(db_path: str | Path | None = None) -> list[str]:
                 "SELECT migration_id FROM schema_migrations"
             ).fetchall()
         }
-        if WORKFLOW_RELATIONSHIP_MIGRATION not in completed:
+        migrations = (
+            (WORKFLOW_RELATIONSHIP_MIGRATION, _apply_workflow_relationships),
+            (SETTINGS_MIGRATION, _apply_workspace_settings),
+        )
+        pending = [
+            (migration_id, migration)
+            for migration_id, migration in migrations
+            if migration_id not in completed
+        ]
+        if pending:
             connection.execute("BEGIN IMMEDIATE")
-            _apply_workflow_relationships(connection)
+            for migration_id, migration in pending:
+                migration(connection)
+                connection.execute(
+                    "INSERT INTO schema_migrations (migration_id) VALUES (?)",
+                    (migration_id,),
+                )
+                applied.append(migration_id)
             violations = connection.execute("PRAGMA foreign_key_check").fetchall()
             if violations:
                 raise RuntimeError(
-                    "foreign key validation failed after workflow migration"
+                    "foreign key validation failed after database migration"
                 )
-            connection.execute(
-                "INSERT INTO schema_migrations (migration_id) VALUES (?)",
-                (WORKFLOW_RELATIONSHIP_MIGRATION,),
-            )
-            applied.append(WORKFLOW_RELATIONSHIP_MIGRATION)
         connection.commit()
         return applied
     except Exception:
@@ -112,6 +149,7 @@ def apply_migrations(db_path: str | Path | None = None) -> list[str]:
 
 __all__ = [
     "WORKFLOW_RELATIONSHIP_MIGRATION",
+    "SETTINGS_MIGRATION",
     "WORKFLOW_COLUMNS",
     "WORKFLOW_INDEXES",
     "apply_migrations",

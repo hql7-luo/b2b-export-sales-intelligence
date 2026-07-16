@@ -1,13 +1,15 @@
-"""Read-only business aggregations for the dashboard."""
+"""Read-only decision metrics for sales analytics."""
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from collections import Counter
+from datetime import date
 from pathlib import Path
 from typing import Any
 
 from database.connection import get_connection
 from database.init_db import initialize_database
+from services.customer_intelligence import customer_portfolio
 from utils.constants import STAGES
 
 
@@ -15,15 +17,23 @@ def _count(connection, sql: str, parameters: tuple[Any, ...] = ()) -> int:
     return int(connection.execute(sql, parameters).fetchone()[0] or 0)
 
 
-def dashboard_snapshot(db_path: str | Path | None = None, today: date | None = None) -> dict[str, Any]:
-    """Return one consistent dashboard snapshot from SQLite."""
+def _percentage(numerator: int, denominator: int) -> float:
+    return round(numerator / denominator * 100, 1) if denominator else 0.0
+
+
+def dashboard_snapshot(
+    db_path: str | Path | None = None,
+    today: date | None = None,
+) -> dict[str, Any]:
+    """Return one consistent set of decision-support metrics from SQLite."""
     today = today or date.today()
     initialize_database(db_path)
+    portfolio = customer_portfolio(db_path, today=today)
+    quality_counts = Counter(
+        customer["lead_quality_band"] for customer in portfolio
+    )
     connection = get_connection(db_path)
     try:
-        grade_rows = connection.execute(
-            "SELECT lead_grade AS label, COUNT(*) AS value FROM customers GROUP BY lead_grade"
-        ).fetchall()
         country_rows = connection.execute(
             "SELECT COALESCE(NULLIF(country, ''), 'Unknown') AS label, COUNT(*) AS value "
             "FROM customers GROUP BY label ORDER BY value DESC"
@@ -36,48 +46,53 @@ def dashboard_snapshot(db_path: str | Path | None = None, today: date | None = N
             "SELECT current_stage AS label, COUNT(*) AS value FROM customers GROUP BY current_stage"
         ).fetchall()
         stage_map = {row["label"]: int(row["value"]) for row in stage_rows}
-        follow_rows = connection.execute(
-            """SELECT id, company_name, contact_name, country, current_stage,
-                      lead_grade, next_follow_up_date
-               FROM customers
-               WHERE next_follow_up_date IS NOT NULL AND next_follow_up_date <= ?
-               ORDER BY CASE lead_grade WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 ELSE 4 END,
-                        next_follow_up_date ASC
-               LIMIT 12""",
-            ((today + timedelta(days=7)).isoformat(),),
-        ).fetchall()
+        inquiry_count = _count(connection, "SELECT COUNT(*) FROM inquiries")
+        quoted_inquiry_count = _count(
+            connection,
+            "SELECT COUNT(DISTINCT inquiry_id) FROM quotations "
+            "WHERE inquiry_id IS NOT NULL",
+        )
+        quoted_customer_count = _count(
+            connection,
+            "SELECT COUNT(DISTINCT customer_id) FROM quotations "
+            "WHERE customer_id IS NOT NULL",
+        )
+        won_quoted_customer_count = _count(
+            connection,
+            "SELECT COUNT(DISTINCT q.customer_id) "
+            "FROM quotations q JOIN customers c ON c.id = q.customer_id "
+            "WHERE c.current_stage = 'Order Confirmed'",
+        )
         metrics = {
             "total_customers": _count(connection, "SELECT COUNT(*) FROM customers"),
-            "new_inquiries": _count(
-                connection,
-                "SELECT COUNT(*) FROM inquiries WHERE inquiry_date >= ?",
-                ((today - timedelta(days=30)).isoformat(),),
-            ),
-            "quoted_customers": _count(
-                connection, "SELECT COUNT(DISTINCT customer_id) FROM quotations WHERE customer_id IS NOT NULL"
-            ),
-            "sample_customers": _count(
-                connection, "SELECT COUNT(*) FROM customers WHERE current_stage = ?", ("Sample",)
-            ),
-            "won_customers": _count(
-                connection, "SELECT COUNT(*) FROM customers WHERE current_stage = ?", ("Order Confirmed",)
-            ),
-            "expected_sales": float(
-                connection.execute(
-                    "SELECT COALESCE(SUM(estimated_purchase_volume), 0) FROM customers WHERE current_stage != ?",
-                    ("Lost",),
-                ).fetchone()[0]
-                or 0
-            ),
             "overdue_follow_ups": _count(
                 connection,
-                "SELECT COUNT(*) FROM customers WHERE next_follow_up_date < ? AND current_stage NOT IN (?, ?)",
-                (today.isoformat(), "Order Confirmed", "Lost"),
+                "SELECT COUNT(*) FROM follow_ups f "
+                "JOIN customers c ON c.id = f.customer_id "
+                "WHERE f.next_follow_up_date < ? "
+                "AND c.current_stage NOT IN ('Order Confirmed', 'Lost')",
+                (today.isoformat(),),
+            ),
+            "inquiry_to_quote_conversion": _percentage(
+                quoted_inquiry_count,
+                inquiry_count,
+            ),
+            "quotation_to_won_conversion": _percentage(
+                won_quoted_customer_count,
+                quoted_customer_count,
             ),
         }
         return {
             "metrics": metrics,
-            "grades": {grade: next((int(row["value"]) for row in grade_rows if row["label"] == grade), 0) for grade in "ABCD"},
+            "lead_quality": {
+                band: quality_counts.get(band, 0)
+                for band in (
+                    "high_potential",
+                    "qualified",
+                    "developing",
+                    "low_signal",
+                )
+            },
             "countries": [dict(row) for row in country_rows],
             "sources": [dict(row) for row in source_rows],
             "funnel": [
@@ -85,10 +100,13 @@ def dashboard_snapshot(db_path: str | Path | None = None, today: date | None = N
                 for stage in STAGES
                 if stage != "Lost"
             ],
-            "follow_ups": [
-                {**dict(row), "overdue": str(row["next_follow_up_date"]) < today.isoformat()}
-                for row in follow_rows
-            ],
+            "demo_data_notice": bool(
+                connection.execute(
+                    "SELECT 1 FROM customers "
+                    "WHERE notes = 'Entirely fictional portfolio demonstration record.' "
+                    "LIMIT 1"
+                ).fetchone()
+            ),
         }
     finally:
         connection.close()

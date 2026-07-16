@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,13 +13,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "export_sales_intelligence.db"
 
 
+def resolve_database_path(
+    db_path: str | Path | None = None,
+) -> Path:
+    """Resolve an explicit path or the optional workspace environment override."""
+    if db_path is not None:
+        return Path(db_path)
+    configured = str(os.getenv("DATABASE_PATH") or "").strip()
+    if not configured:
+        return DEFAULT_DB_PATH
+    path = Path(configured).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 def get_connection(db_path: str | Path | None = None) -> sqlite3.Connection:
     """Create a configured SQLite connection.
 
     ``db_path`` is injectable so tests and scripts never need to modify the
     application database.
     """
-    path = Path(db_path) if db_path is not None else DEFAULT_DB_PATH
+    path = resolve_database_path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     is_default_database = path.resolve() == DEFAULT_DB_PATH.resolve()
     if is_default_database:
