@@ -14,7 +14,8 @@ def test_release_files_are_present_and_documented() -> None:
     required = (
         ROOT / ".github/workflows/tests.yml",
         ROOT / ".streamlit/secrets.toml.example",
-        ROOT / "output/jupyter-notebook/colab-demo.ipynb",
+        ROOT / "notebooks/export_sales_intelligence_demo.ipynb",
+        ROOT / "LICENSE",
         ROOT / ".env.example",
         ROOT / "requirements.txt",
     )
@@ -34,6 +35,7 @@ def test_github_actions_runs_the_complete_pytest_suite() -> None:
     )
     assert "python -m pytest" in workflow
     assert "requirements.txt" in workflow
+    assert 'python-version: "3.11"' in workflow
     assert "push:" in workflow
     assert "pull_request:" in workflow
 
@@ -63,11 +65,12 @@ def test_gitignore_excludes_runtime_secrets_databases_and_notebook_checkpoints()
 
 
 def test_colab_notebook_is_clean_structured_and_uses_fictional_examples() -> None:
-    notebook_path = ROOT / "output/jupyter-notebook/colab-demo.ipynb"
+    notebook_path = ROOT / "notebooks/export_sales_intelligence_demo.ipynb"
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
 
     assert notebook["nbformat"] == 4
     assert len(notebook["cells"]) >= 8
+    assert sum(cell["cell_type"] == "code" for cell in notebook["cells"]) == 7
     source = "\n".join(
         "".join(cell.get("source") or []) for cell in notebook["cells"]
     )
@@ -76,6 +79,11 @@ def test_colab_notebook_is_clean_structured_and_uses_fictional_examples() -> Non
     assert "Gross Margin" in source
     assert "Markup" in source
     assert "fictional" in source.lower()
+    assert "https://github.com/hql7-luo/b2b-export-sales-intelligence.git" in source
+    assert "score_customer" in source
+    assert "analyze_inquiry_rules" in source
+    assert "calculate_quotation" in source
+    assert "dashboard_snapshot" in source
     assert "/Users/" not in source
     for cell in notebook["cells"]:
         if cell["cell_type"] == "code":
