@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 *.py[cod]
@@ -7,8 +9,10 @@ __pycache__/
 htmlcov/
 .DS_Store
 data/*.db
+data/*.db-*
 data/*.sqlite*
 data/backups/*.db
+data/backups/*.db-*
 data/backups/*.sqlite*
 .streamlit/secrets.toml
 .ipynb_checkpoints/

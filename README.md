@@ -170,6 +170,8 @@ flowchart LR
   fictional demo data.
 - `locales/` contains stable English and Simplified Chinese translation keys.
 - `components/` contains the approved visual system and workflow context.
+- [Original design and acceptance notes](docs/design/README.md) preserve the
+  development brief and rubric; they are not measured benchmark results.
 
 ## Database relationships
 
@@ -223,7 +225,9 @@ QA data is created in temporary databases and is not part of the seed.
 
 ## Installation
 
-Python 3.11 or later is recommended.
+Python 3.11 and 3.12 are tested in CI; Python 3.12 is recommended for local use.
+`requirements.txt` locks all direct and transitive dependencies with hashes.
+`requirements.in` retains the supported dependency ranges for maintenance.
 
 ```bash
 git clone https://github.com/hql7-luo/b2b-export-sales-intelligence.git
@@ -231,8 +235,7 @@ cd b2b-export-sales-intelligence
 
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+python -m pip install --require-hashes -r requirements.txt
 
 cp .env.example .env
 python -m database.init_db
@@ -278,14 +281,28 @@ python -m pytest --cov=services --cov=database --cov-report=term-missing
 
 Tests cover pricing formulas, inquiry analysis, repository safety, migrations,
 workflow relationships, translation keys, demo reset behavior, release files,
-and application smoke rendering.
+application smoke rendering, contact-identifier preservation and missing values
+in customer imports. CSV contact fields stay text, and ambiguous normalized
+column names are rejected instead of silently replacing customer data.
+
+To refresh dependencies within the existing supported ranges, use
+[uv](https://docs.astral.sh/uv/) from the repository root:
+
+```bash
+uv pip compile --python-version 3.11 --universal --generate-hashes --no-emit-index-url requirements.in -o requirements.txt
+python -m pip install --require-hashes -r requirements.txt
+python -m pytest
+```
+
+Review the generated lock and run both supported Python versions before release.
 
 ## Deployment
 
 ### GitHub Actions
 
-`.github/workflows/tests.yml` installs `requirements.txt` with Python 3.11 and
-runs the complete pytest suite on pushes and pull requests.
+`.github/workflows/tests.yml` installs the hash-locked `requirements.txt` with
+Python 3.11 and 3.12, checks compilation and runs the complete pytest suite with
+coverage on pushes and pull requests.
 
 ### Streamlit Community Cloud
 
@@ -317,7 +334,8 @@ and authentication before handling real customer information.
 
 Open the
 [Google Colab demo](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb)
-to run seven code cells directly from the GitHub `main` branch. It demonstrates
+to run seven code cells directly from the GitHub `main` branch. Its setup cell
+installs the same locked dependencies in Colab before importing the project. It demonstrates
 customer scoring, inquiry analysis, Gross Margin versus Markup, quotation
 outputs, and decision-focused business charts using only fictional data. No API
 key is required.
@@ -371,11 +389,13 @@ key is required.
 ├── locales/
 ├── tests/
 ├── docs/screenshots/
+├── docs/design/
 ├── notebooks/export_sales_intelligence_demo.ipynb
 ├── .github/workflows/tests.yml
 ├── .streamlit/
 ├── LICENSE
 ├── requirements.txt
+├── requirements.in
 └── README.md
 ```
 

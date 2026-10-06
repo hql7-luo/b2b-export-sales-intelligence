@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from math import isfinite
 from pathlib import Path
 
 from database.connection import get_connection
@@ -74,7 +75,8 @@ def _apply_workflow_relationships(connection) -> None:
 def _default_exchange_rate() -> str:
     value = str(os.getenv("DEFAULT_EXCHANGE_RATE", "7.20")).strip()
     try:
-        return value if float(value) > 0 else "7.20"
+        rate = float(value)
+        return value if isfinite(rate) and rate > 0 else "7.20"
     except ValueError:
         return "7.20"
 

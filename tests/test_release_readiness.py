@@ -48,7 +48,9 @@ def test_github_actions_runs_the_complete_pytest_suite() -> None:
     )
     assert "python -m pytest" in workflow
     assert "requirements.txt" in workflow
-    assert 'python-version: "3.11"' in workflow
+    assert 'python-version: ["3.11", "3.12"]' in workflow
+    assert "python-version: ${{ matrix.python-version }}" in workflow
+    assert "--require-hashes" in workflow
     assert "push:" in workflow
     assert "pull_request:" in workflow
 

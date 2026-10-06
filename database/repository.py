@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from decimal import Decimal
+from math import isfinite
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -961,10 +962,11 @@ def set_setting(
     value = str(setting_value).strip()
     if setting_key == "default_exchange_rate":
         try:
-            if float(value) <= 0:
+            rate = float(value)
+            if not isfinite(rate) or rate <= 0:
                 raise ValueError
         except ValueError:
-            raise ValueError("exchange rate must be greater than zero") from None
+            raise ValueError("exchange rate must be finite and greater than zero") from None
     initialize_database(db_path)
     connection = get_connection(db_path)
     try:

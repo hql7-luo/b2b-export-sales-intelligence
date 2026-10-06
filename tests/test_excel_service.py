@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from io import BytesIO
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 import pytest
 
@@ -100,3 +100,37 @@ def test_customer_import_normalizes_volume_and_dates() -> None:
     assert row["estimated_purchase_volume"] == 12000.0
     assert row["last_contact_date"] == "2026-07-01"
     assert row["next_follow_up_date"] == "2026-07-20"
+
+
+def test_csv_import_preserves_contact_identifiers_and_optional_blank_volume() -> None:
+    payload = (
+        b"Company Name,Phone,Estimated Purchase Volume\n"
+        b"Fictional Buyer One,001234567,120\n"
+        b"Fictional Buyer Two,009876543,\n"
+    )
+
+    rows = import_customer_file(payload, "customers.csv")
+
+    assert [row["phone"] for row in rows] == ["001234567", "009876543"]
+    assert [row["estimated_purchase_volume"] for row in rows] == [120.0, 0.0]
+
+
+def test_excel_import_accepts_blank_optional_numeric_cells() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Company Name", "Estimated Purchase Volume"])
+    sheet.append(["Fictional Buyer One", 120])
+    sheet.append(["Fictional Buyer Two", None])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    rows = import_customer_file(buffer.getvalue(), "customers.xlsx")
+
+    assert [row["estimated_purchase_volume"] for row in rows] == [120.0, 0.0]
+
+
+def test_import_rejects_columns_that_would_overwrite_customer_values() -> None:
+    payload = b"Company Name,Company-Name\nFictional Buyer One,Fictional Buyer Two\n"
+
+    with pytest.raises(ValueError, match="Column names must be unique"):
+        import_customer_file(payload, "customers.csv")
