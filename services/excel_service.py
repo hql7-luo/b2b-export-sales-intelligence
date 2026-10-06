@@ -91,7 +91,9 @@ def import_customer_file(payload: bytes, filename: str) -> list[dict[str, Any]]:
     suffix = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
     buffer = BytesIO(payload)
     if suffix == "csv":
-        frame = pd.read_csv(buffer)
+        # Contact identifiers are text: inference drops leading zeroes in phones.
+        # Keep explicit "NaN" input distinct from an empty optional value.
+        frame = pd.read_csv(buffer, dtype=str, keep_default_na=False)
     elif suffix in {"xlsx", "xlsm"}:
         if not zipfile.is_zipfile(buffer):
             raise ValueError("The Excel file signature is invalid.")
@@ -114,9 +116,12 @@ def import_customer_file(payload: bytes, filename: str) -> list[dict[str, Any]]:
         str(column).strip().lower().replace(" / ", "_").replace(" ", "_").replace("-", "_")
         for column in frame.columns
     ]
+    if frame.columns.duplicated().any():
+        raise ValueError("Column names must be unique after normalization.")
     if "company_name" not in frame.columns:
         raise ValueError("The file must contain a Company Name column.")
-    frame = frame.where(pd.notna(frame), None)
+    # Float columns otherwise retain NaN when replacing missing cells with None.
+    frame = frame.astype(object).where(pd.notna(frame), None)
     normalized_rows: list[dict[str, Any]] = []
     for row_number, row in enumerate(frame.to_dict(orient="records"), start=2):
         normalized = {

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from database.repository import (
     create_customer,
     create_follow_up,
@@ -202,6 +204,16 @@ def test_default_exchange_rate_is_persisted_and_editable(db_path) -> None:
     set_setting("default_exchange_rate", "7.35", db_path=db_path)
 
     assert get_setting("default_exchange_rate", db_path=db_path) == "7.35"
+
+
+@pytest.mark.parametrize("invalid_rate", ["nan", "inf", "-inf", "0", "invalid"])
+def test_invalid_exchange_rate_does_not_replace_persisted_setting(db_path, invalid_rate) -> None:
+    previous = get_setting("default_exchange_rate", db_path=db_path)
+
+    with pytest.raises(ValueError, match="finite and greater than zero"):
+        set_setting("default_exchange_rate", invalid_rate, db_path=db_path)
+
+    assert get_setting("default_exchange_rate", db_path=db_path) == previous
 
 
 def test_product_match_counts_are_derived_from_inquiries(db_path) -> None:

@@ -6,9 +6,10 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 
+ROOT = Path(__file__).resolve().parents[1]
 PAGE_FILES = [
-    Path("app.py"),
-    *sorted(path for path in Path("pages").glob("*.py") if path.name != "__init__.py"),
+    ROOT / "app.py",
+    *sorted(path for path in (ROOT / "pages").glob("*.py") if path.name != "__init__.py"),
 ]
 
 
@@ -32,7 +33,7 @@ def test_streamlit_page_starts_in_chinese(page_file: Path) -> None:
 
 @pytest.mark.smoke
 def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
-    app = AppTest.from_file("app.py").run(timeout=20)
+    app = AppTest.from_file(str(ROOT / "app.py")).run(timeout=20)
 
     assert app.title[0].value == "Analyze Inquiry"
     app.text_area[0].set_value("Please quote 2,000 fictional sample cartons to Rotterdam.").run(timeout=20)
@@ -71,7 +72,7 @@ def test_language_switch_changes_copy_without_losing_inquiry_context() -> None:
 
 @pytest.mark.smoke
 def test_analyzed_inquiry_and_edited_reply_survive_language_switch() -> None:
-    app = AppTest.from_file("app.py").run(timeout=20)
+    app = AppTest.from_file(str(ROOT / "app.py")).run(timeout=20)
 
     app.button(key="load_demo_inquiry").click().run(timeout=20)
     assert "5,000 custom hardcover notebooks" in app.text_area(key="inquiry_input").value

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from database.connection import get_connection
 from database.migrations import (
     SETTINGS_MIGRATION,
@@ -147,3 +149,17 @@ def test_workflow_relationship_migration_creates_each_index_once(tmp_path) -> No
         connection.close()
 
     assert len(index_names) == len(set(index_names)) == 7
+
+
+@pytest.mark.parametrize("configured_rate", ["nan", "inf", "-inf", "0", "invalid"])
+def test_invalid_environment_exchange_rate_uses_safe_default(
+    tmp_path, monkeypatch, configured_rate
+) -> None:
+    from database.init_db import initialize_database
+    from database.repository import get_setting
+
+    monkeypatch.setenv("DEFAULT_EXCHANGE_RATE", configured_rate)
+    db_path = tmp_path / "invalid-rate.db"
+    initialize_database(db_path)
+
+    assert get_setting("default_exchange_rate", db_path=db_path) == "7.20"
