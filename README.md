@@ -1,67 +1,62 @@
 # B2B Export Sales Workspace
 
 [![Tests](https://github.com/hql7-luo/b2b-export-sales-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/hql7-luo/b2b-export-sales-intelligence/actions/workflows/tests.yml)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.59%2B-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Open Live Demo](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb)
 
-A bilingual, local-first workspace that helps export sales teams turn an
-English buyer message into a traceable customer record, quotation, and
-follow-up task.
+**A bilingual Python / Streamlit workspace that turns a buyer RFQ into a linked
+customer record, USD quotation, follow-up task and sales analysis.**
 
-## What problem it solves
+**Problem:** export teams lose context when inquiries, costs and next actions
+live in separate inboxes and spreadsheets.
 
-Export sales work often moves between inboxes, spreadsheets, chat tools, and
-individual memory. That makes it easy to:
+**Input → output:** English buyer message + product / cost records → reviewed
+requirements, a traceable quotation and a prioritized next action.
 
-- quote before specifications, quantity, or destination are confirmed;
-- confuse Gross Margin with Markup;
-- re-enter the same customer and inquiry facts on multiple pages;
-- lose the relationship between an inquiry, quotation, and follow-up;
-- miss overdue work or prioritize customers by incomplete profile data alone.
+[Live demo](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/) ·
+[Colab walkthrough](https://colab.research.google.com/github/hql7-luo/b2b-export-sales-intelligence/blob/main/notebooks/export_sales_intelligence_demo.ipynb) ·
+[Local setup](#installation)
 
-This application creates one small operating workspace for those decisions.
-SQLite stores the long-term business relationships; Streamlit Session State is
-used only for temporary page-to-page context.
+## One complete sales workflow
 
-## Core workflow
+<picture>
+  <source media="(max-width: 640px)" srcset="docs/visuals/sales-workflow-mobile.png">
+  <img src="docs/visuals/sales-workflow.png" alt="Six actual UI steps: buyer inquiry, structured analysis, customer record, quotation, follow-up and sales analytics. All data is fictional.">
+</picture>
 
-**Analyze Inquiry → Prepare Quotation → Follow Up**
+**Analyze Inquiry → Prepare Quotation → Follow Up** is backed by SQLite:
+customer, inquiry, product, quotation and task IDs stay linked across pages.
+The montage shows the current application using fictional seed data;
+[view its source crops and regeneration method](docs/visuals/README.md).
 
-The application preserves the customer, inquiry, matched product, quotation,
-and follow-up relationships across the workflow. It does not attempt to replace
-an ERP, customs platform, or order-execution system. Optional enhanced inquiry
-analysis is supported, but the complete core workflow runs without an API key.
+**What I built:** local inquiry parsing and information-gap checks; SQL-backed
+customer prioritization; CNY-to-USD pricing with explicit Gross Margin / Markup;
+linked follow-up tasks; and Pandas / Plotly sales analytics.
 
-## Live Demo
+**Skills demonstrated:** Python · SQL / SQLite · Pandas · Streamlit · business
+logic · workflow design · decision support.
 
-[Open the public Streamlit workspace](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)
-or use the Live Demo badge above. The deployed application uses fictional data
-and works in local-rules mode without an API key.
+**Business value:** review missing details before quoting, avoid re-entering
+customer facts, and make the next sales action visible. These are capabilities
+of the prototype, not measured revenue or productivity gains.
 
-Streamlit Community Cloud may restart the application and reinitialize its
-local SQLite database. Treat the online workspace as a resettable demonstration,
-not durable storage, and do not enter confidential customer information.
+## See where sales effort should go
 
-## Screenshots
+![Current sales analytics: sales-stage distribution, Lead Quality, overdue work and conversion ratios, calculated from fictional demo records](docs/visuals/sources/analytics.png)
 
-### Public bilingual workspace
+The funnel shows **current stage counts**, not a historical cohort conversion
+funnel. Lead Quality uses commercial signals separately from profile
+completeness. The conversion ratios are calculated from persisted inquiry /
+quotation / customer links; **all figures are fictional demonstration data,
+not real business performance**.
 
-![Public Streamlit demo](docs/screenshots/live-demo-public.png)
+## Demo scope
 
-### End-to-end workflow
-
-![Analyzed inquiry](docs/screenshots/phase5-en-inquiry.png)
-
-![Prepared quotation](docs/screenshots/phase5-zh-quotation.png)
-
-![Customer business timeline](docs/screenshots/phase5-en-timeline.png)
-
-### Decision-focused analytics
-
-![Business analytics workspace](docs/screenshots/phase4-en-analytics.png)
+The [public workspace](https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj.streamlit.app/)
+runs the full local-rules workflow without an API key. All bundled companies,
+contacts, products, costs and outcomes are fictional. Community Cloud can
+restart and reset its SQLite database, and may sleep after inactivity. If a
+sleep screen appears, use the public wake-up button. Treat it as a demonstration
+and do not enter confidential customer information. Optional enhanced analysis is
+available locally; the core workflow does not need it.
 
 ## How to use it
 
@@ -95,22 +90,16 @@ inputs. Customer-facing suggested replies remain professional English.
 
 ### Professional customer portfolio
 
-![Customer portfolio](docs/screenshots/phase4-en-customers.png)
-
 Data Completeness measures whether the customer record is usable. Lead Quality
 is separate and uses commercial value: purchase potential, buying progress,
 persisted inquiry/quotation evidence, and engagement.
 
 ### Follow-up task queue
 
-![Follow-up task queue](docs/screenshots/phase4-en-followups.png)
-
 Tasks are grouped into overdue, today, and future work. Each persisted task
 shows its customer, stage, priority, Inquiry ID, and Quotation ID.
 
 ### Unmatched product handling
-
-![Unmatched product quotation](docs/screenshots/phase4-en-unmatched-quotation.png)
 
 An older inquiry without a matched product can be rematched, assigned manually,
 or used to calculate an unmatched draft. Formal saving requires explicit
