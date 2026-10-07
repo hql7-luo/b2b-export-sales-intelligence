@@ -19,6 +19,10 @@ def test_release_files_are_present_and_documented() -> None:
         ROOT / ".env.example",
         ROOT / "requirements.txt",
         ROOT / "docs/screenshots/live-demo-public.png",
+        ROOT / "docs/visuals/sales-workflow.png",
+        ROOT / "docs/visuals/sales-workflow-mobile.png",
+        ROOT / "docs/visuals/sources/analytics.png",
+        ROOT / "docs/visuals/capture-manifest.json",
     )
     assert all(path.exists() for path in required)
 
@@ -26,9 +30,9 @@ def test_release_files_are_present_and_documented() -> None:
     assert "Analyze Inquiry → Prepare Quotation → Follow Up" in readme
     assert "fictional" in readme.lower()
     assert "Limitations" in readme
-    assert "docs/screenshots/phase4-en-analytics.png" in readme
-    assert "docs/screenshots/phase4-en-customers.png" in readme
-    assert "docs/screenshots/live-demo-public.png" in readme
+    assert "docs/visuals/sales-workflow.png" in readme
+    assert "docs/visuals/sales-workflow-mobile.png" in readme
+    assert "docs/visuals/sources/analytics.png" in readme
     assert (
         "https://b2b-export-sales-intelligence-qtonipxh5e4bwnfst2a5zj"
         ".streamlit.app/"

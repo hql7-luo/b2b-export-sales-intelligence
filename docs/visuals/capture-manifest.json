@@ -1,0 +1,103 @@
+{
+  "sourceCommit": "8ed59257d11e3fa88eec691b4404c23aedaaa159",
+  "capturedAt": "2026-10-07T22:42:37.116Z",
+  "viewport": {
+    "width": 1440,
+    "height": 1050
+  },
+  "data": "Fictional bundled seed data plus the built-in fictional inquiry; no API key. Analytics was captured before walkthrough writes.",
+  "processing": "Unaltered UI crops; the montage only scales and lays out these images.",
+  "captures": [
+    {
+      "file": "sources/analytics.png",
+      "urlPath": "/dashboard",
+      "clip": {
+        "x": 300,
+        "y": 141.921875,
+        "width": 1140,
+        "height": 870
+      },
+      "sha256": "ecbb6361791b3d3ae1a37009b03e800da064669145c817c282380f106b9c725a",
+      "dimensions": [
+        1140,
+        870
+      ]
+    },
+    {
+      "file": "sources/inquiry.png",
+      "urlPath": "/",
+      "clip": {
+        "x": 300,
+        "y": 469.5,
+        "width": 1140,
+        "height": 285
+      },
+      "sha256": "06d0b6b6e71df73f3c168be31a2187c377f746479358de5a98eea9f503adb586",
+      "dimensions": [
+        1140,
+        285
+      ]
+    },
+    {
+      "file": "sources/analysis.png",
+      "urlPath": "/",
+      "clip": {
+        "x": 300,
+        "y": 142.078125,
+        "width": 1140,
+        "height": 410
+      },
+      "sha256": "bcc0c58e62c5babb63669f6e3529b83b95798278f29462c96cd3fefb3f7e8514",
+      "dimensions": [
+        1140,
+        410
+      ]
+    },
+    {
+      "file": "sources/customer.png",
+      "urlPath": "/",
+      "clip": {
+        "x": 300,
+        "y": 727.65625,
+        "width": 1140,
+        "height": 290
+      },
+      "sha256": "d3260a31933fd6c63938c0264fefecf6b94c98a49b483f80ecbe116431a46f78",
+      "dimensions": [
+        1140,
+        290
+      ]
+    },
+    {
+      "file": "sources/quotation.png",
+      "urlPath": "/quotation_calculator",
+      "clip": {
+        "x": 300,
+        "y": 522.21875,
+        "width": 1140,
+        "height": 410
+      },
+      "sha256": "1fd010adc9b940522513ba9c018c5cdad824ea3bcb5300512947131a797520e5",
+      "dimensions": [
+        1140,
+        410
+      ]
+    },
+    {
+      "file": "sources/followup.png",
+      "urlPath": "/follow_up_tracker",
+      "clip": {
+        "x": 300,
+        "y": 141.5,
+        "width": 1140,
+        "height": 445
+      },
+      "sha256": "e92f30cff3b2c605f06c9bf3efdc5d456f1cfbdfbcc94bdaf1a10a2666161e4b",
+      "dimensions": [
+        1140,
+        445
+      ]
+    }
+  ],
+  "generator": "scripts/build_workflow_visual.py (Pillow; only layout, scaling and workflow labels)"
+}
