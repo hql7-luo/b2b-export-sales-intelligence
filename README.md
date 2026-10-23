@@ -117,7 +117,7 @@ USD quote = CNY quote ÷ X
 The workspace setting supplies a default exchange rate. Each quotation can
 override it without changing the default.
 
-### Gross Margin — default
+### Gross Margin (default)
 
 ```text
 Selling price = Cost ÷ (1 - Gross Margin rate)
@@ -125,7 +125,7 @@ Selling price = Cost ÷ (1 - Gross Margin rate)
 
 Gross Margin measures profit as a percentage of selling price.
 
-### Markup — alternative
+### Markup (alternative)
 
 ```text
 Selling price = Cost × (1 + Markup rate)
