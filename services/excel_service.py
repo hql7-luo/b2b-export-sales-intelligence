@@ -105,7 +105,9 @@ def import_customer_file(payload: bytes, filename: str) -> list[dict[str, Any]]:
             if sum(member.file_size for member in members) > 25 * 1024 * 1024:
                 raise ValueError("The expanded Excel file exceeds the 25 MB safety limit.")
         buffer.seek(0)
-        frame = pd.read_excel(buffer, engine="openpyxl")
+        # Match CSV handling: text identifiers and literal "NaN" are not missing values.
+        # Business numbers and dates are validated explicitly below.
+        frame = pd.read_excel(buffer, engine="openpyxl", dtype=str, keep_default_na=False)
     else:
         raise ValueError("Only CSV and XLSX files are supported.")
     if frame.empty:

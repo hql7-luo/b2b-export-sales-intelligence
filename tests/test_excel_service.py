@@ -129,6 +129,33 @@ def test_excel_import_accepts_blank_optional_numeric_cells() -> None:
     assert [row["estimated_purchase_volume"] for row in rows] == [120.0, 0.0]
 
 
+def test_excel_import_preserves_text_identifiers_and_literal_na_values() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Company Name", "Phone", "Contact Name", "Estimated Purchase Volume"])
+    sheet.append(["Fictional Buyer", "001234567", "NA", 120])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    row = import_customer_file(buffer.getvalue(), "customers.xlsx")[0]
+
+    assert row["phone"] == "001234567"
+    assert row["contact_name"] == "NA"
+    assert row["estimated_purchase_volume"] == 120.0
+
+
+def test_excel_import_rejects_explicit_nan_volume() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Company Name", "Estimated Purchase Volume"])
+    sheet.append(["Fictional Buyer", "NaN"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    with pytest.raises(ValueError, match="finite number"):
+        import_customer_file(buffer.getvalue(), "customers.xlsx")
+
+
 def test_import_rejects_columns_that_would_overwrite_customer_values() -> None:
     payload = b"Company Name,Company-Name\nFictional Buyer One,Fictional Buyer Two\n"
 
