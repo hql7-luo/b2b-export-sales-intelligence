@@ -27,7 +27,7 @@ customer, inquiry, product, quotation and task IDs stay linked across pages.
 The montage shows the current application using fictional seed data;
 [view its source crops and regeneration method](docs/visuals/README.md).
 
-**What I built:** local inquiry parsing and information-gap checks; SQL-backed
+**What it includes:** local inquiry parsing and information-gap checks; SQL-backed
 customer prioritization; CNY-to-USD pricing with explicit Gross Margin / Markup;
 linked follow-up tasks; and Pandas / Plotly sales analytics.
 
@@ -388,12 +388,4 @@ key is required.
 └── README.md
 ```
 
-## Resume description
-
-- Built a bilingual Streamlit and SQLite export-sales workspace that persists
-  the complete Inquiry → Quotation → Follow-up relationship and customer
-  timeline.
-- Implemented a tested quotation engine for EXW, FOB, CIF, DDP, Gross Margin,
-  Markup, per-quotation exchange rates, and Excel output.
-- Designed decision-focused customer quality, follow-up queue, product
-  reference, and sales analytics modules using Python, SQL, Pandas, and Plotly.
+Independent project by Haoqi Luo. I chose the question, checked the data and results, and decided the conclusions. AI coding tools helped with the implementation.
